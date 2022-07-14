@@ -31,6 +31,7 @@ class InheritanceUnit(FunctionUnit):
     def makeIt(ds_h, descr, before = None, after = None):
         unit_h = InheritanceUnit(ds_h, descr)
         ds_h.getEvalSpace()._insertUnit(unit_h, before = before, after = after)
+        ds_h.getEvalSpace()._addFunction(unit_h)
 
     def __init__(self, ds_h, descr):
         FunctionUnit.__init__(self, ds_h.getEvalSpace(), descr,
@@ -60,15 +61,15 @@ class InheritanceUnit(FunctionUnit):
             yield (self.sCaseLabels[3],
                 self.mZygSupport.conditionZCompens(p_group))
 
-    def makeInfoStat(self, eval_h, point_no):
-        ret_handle = self.prepareStat()
+    def makeInfoStat(self, eval_h, stat_ctx, point_no):
+        ret_handle = self.prepareStat(stat_ctx)
         ret_handle["family"] = self.mZygSupport.getNames()
         ret_handle["affected"] = self.mZygSupport.getAffectedGroup()
         ret_handle["available"] = self.mAvailLabels
         return ret_handle
 
-    def makeParamStat(self, condition, parameters, eval_h, point_no):
-        ret_handle = self.prepareStat()
+    def makeParamStat(self, condition, parameters, eval_h, stat_ctx, point_no):
+        ret_handle = self.prepareStat(stat_ctx)
         if parameters is None or parameters.get("problem_group") is None:
             p_group = self.mZygSupport.getAffectedGroup()
         else:
@@ -114,6 +115,7 @@ class CustomInheritanceUnit(FunctionUnit):
     def makeIt(ds_h, descr, before = None, after = None):
         unit_h = CustomInheritanceUnit(ds_h, descr)
         ds_h.getEvalSpace()._insertUnit(unit_h, before = before, after = after)
+        ds_h.getEvalSpace()._addFunction(unit_h)
 
     def __init__(self, ds_h, descr):
         FunctionUnit.__init__(self, ds_h.getEvalSpace(), descr,
@@ -127,14 +129,14 @@ class CustomInheritanceUnit(FunctionUnit):
             yield ("True",
                 self.mZygSupport.conditionScenario(context["scenario"]))
 
-    def makeInfoStat(self, eval_h, point_no):
-        ret_handle = self.prepareStat()
+    def makeInfoStat(self, eval_h, stat_ctx, point_no):
+        ret_handle = self.prepareStat(stat_ctx)
         ret_handle["family"] = self.mZygSupport.getNames()
         ret_handle["affected"] = self.mZygSupport.getAffectedGroup()
         return ret_handle
 
-    def makeParamStat(self, condition, parameters, eval_h, point_no):
-        ret_handle = self.prepareStat()
+    def makeParamStat(self, condition, parameters, eval_h, stat_ctx, point_no):
+        ret_handle = self.prepareStat(stat_ctx)
         ret_handle.update(parameters)
         scenario = parameters.get("scenario")
         if not scenario:

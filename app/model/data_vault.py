@@ -18,23 +18,26 @@
 #  limitations under the License.
 #
 
-import sys, os, json, logging, traceback
+import sys, os, json, logging, traceback, re, shutil
+import typing, array
 from glob import glob
 from io import StringIO
+from copy import deepcopy
 from threading import Lock
 from datetime import datetime
 from collections import defaultdict
 
 from .rest_api import RestAPI
 from .sol_env import SolutionEnv
+from .genes_db import GenesDB
 from app.ws.workspace import Workspace
+from app.ws.ws_io import importWS
 from app.xl.xl_dataset import XLDataset
 from forome_tools.log_err import logException
 from forome_tools.sync_obj import SyncronizedObject
 #===============================================
 class DataVault(SyncronizedObject):
-    def __init__(self, application, vault_dir,
-            var_registry, auto_mode = True):
+    def __init__(self, application, vault_dir, var_registry, auto_mode = True):
         SyncronizedObject.__init__(self)
         self.mApp = application
         self.mVaultDir = os.path.abspath(vault_dir)
@@ -44,7 +47,11 @@ class DataVault(SyncronizedObject):
         self.mSolEnvDict = dict()
         self.mScanModeLevel = 0
         self.mIntVersion = 0
+        self.mIGVInfo = None
         self.mProblemDataFStats = dict()
+        self.mIGV_FStat = None
+        self.mGenesDB = GenesDB(self.mApp.getMongoConnector())
+
         if not auto_mode:
             return
         self.scanAll(False)
@@ -61,6 +68,8 @@ class DataVault(SyncronizedObject):
             logging.info("XL-datasets: " + " ".join(sorted(names[0])))
         if len(names[1]) > 0:
             logging.info("WS-datasets: " + " ".join(sorted(names[1])))
+        if self.mIGV_FStat is None:
+            logging.info("igv-dir is not set up")
 
     def scanAll(self, report_it = True):
         with self:
@@ -94,6 +103,7 @@ class DataVault(SyncronizedObject):
     def _scanAll(self, report_it):
         with self:
             prev_set = set(self.mDataSets.keys())
+        self.checkIGVSetup()
         new_path_list = list(glob(self.mVaultDir + "/*/active"))
         new_set, upd_set = set(), set()
         for active_path in new_path_list:
@@ -185,7 +195,8 @@ class DataVault(SyncronizedObject):
 
     def unloadDS(self, ds_name, ds_kind = None):
         with self:
-            ds_h = self.mDataSets[ds_name]
+            ds_h = self.mDataSets.get(ds_name)
+            assert ds_h is not None, ("No dataset " + ds_name)
             assert not ds_kind or ds_kind == ds_h.getDSKind(), (
                 "Dataset kind collision: "
                 + ds_h.getDSKind() + " vs. " + ds_kind)
@@ -208,11 +219,65 @@ class DataVault(SyncronizedObject):
                     self.mApp.getMongoConnector(), root_name)
             return self.mSolEnvDict[root_name]
 
-    def getVariableInfo(self, var_name):
-        return self.mVarRegistry.getVarInfo(var_name)
+    def getVariableInfo(self, var_name, unit_kind, sub_kind, mean):
+        var_kind, var_descr = self.mVarRegistry.getVarInfo(var_name)
+        assert unit_kind == var_kind, (
+            f"Variable kind conflict: {unit_kind}/{var_kind} for {var_name}")
+        var_info = deepcopy(var_descr)
+        if unit_kind == "enum" and var_info.get("render-mode") is None:
+            if mean == "variety":
+                var_info["render-mode"] = "tree-map"
+            elif sub_kind in {"status", "transcript-status"}:
+                var_info["render-mode"] = "pie"
+            else:
+                assert sub_kind in {"multi", "transcript-multiset",
+                    "transcript-panels", "transcript-variety"}, (
+                    "Wrong subkind: " + sub_kind)
+                var_info["render-mode"] = "bar"
+        return var_info
 
     def getVarRegistry(self):
         return self.mVarRegistry
+
+    def checkIGVSetup(self):
+        igv_dir_fname = self.mApp.getOption("igv-dir")
+        if not igv_dir_fname:
+            assert self.mIGVInfo is None
+            return
+        igv_fstat = self.checkFileStat(igv_dir_fname)
+        if igv_fstat is None:
+            if self.mIGV_FStat is not None:
+                self.mIGVInfo = None
+                logging.warning(f"IGV-dir file {igv_dir_fname} "
+                    + "existed before but dropped")
+            return
+        if self.mIGV_FStat == igv_fstat:
+            return
+        self.mIGV_FStat = igv_fstat
+        igv_info = dict()
+        try:
+            with open(igv_dir_fname, "r", encoding = "utf-8") as inp:
+                records = json.loads(inp.read())
+            for idx, rec in enumerate(records):
+                ds_name, url = rec["dataset"], rec["url"]
+                assert ds_name not in igv_info, (
+                    f"Dataset {ds_name} duplication in record no {idx + 1}")
+                igv_info[ds_name] = url
+        except Exception:
+            logException(f"Exception on load igv-dir {igv_dir_fname}")
+        with self:
+            self.mIGVInfo = igv_info
+        logging.info(f"IGV-dir is set up with {len(self.mIGVInfo)} records")
+
+    def getIGVUrl(self, ds_name):
+        with self:
+            if self.mIGVInfo is None:
+                return None
+            return self.mIGVInfo.get(ds_name)
+
+    def getPanelDB(self, tp):
+        assert tp == "Symbol"
+        return self.mGenesDB
 
     #===============================================
     @RestAPI.vault_request
@@ -226,7 +291,7 @@ class DataVault(SyncronizedObject):
                 assert ds_name == ds_info["name"], (
                     "Dataset name collision: "
                     + ds_info["name"] + " vs. " + ds_name)
-                anc_names = [name for name, _ in ds_info["ancestors"]]
+                anc_names = [info[0] for info in ds_info["ancestors"]]
                 if len(anc_names) > 0:
                     root_name = anc_names[-1]
                     if root_name not in ds_dict:
@@ -297,6 +362,20 @@ class DataVault(SyncronizedObject):
         return "OK"
 
     #===============================================
+    @RestAPI.vault_request
+    def rq__import_ws(self, rq_args):
+        assert "name" in rq_args, 'Missing argument "name"'
+        assert "file" in rq_args, 'Missing argument "file"'
+        ds_name = rq_args["name"]
+        content = rq_args["file"]
+        if (isinstance(ds_name, typing.ByteString)
+                or isinstance(ds_name, array.array)):
+            ds_name = ds_name.decode("utf-8")
+        ret = importWS(self, ds_name, content)
+        self.scanAll()
+        return ret
+
+    #===============================================
     # Administrator authorization required
     @RestAPI.vault_request
     def rq__adm_update(self, rq_args):
@@ -310,3 +389,21 @@ class DataVault(SyncronizedObject):
         self.unloadDS(ds_name)
         self.loadDS(ds_name)
         return "Reloaded " + ds_name
+
+    @RestAPI.vault_request
+    def rq__adm_drop_ds(self, rq_args):
+        assert "ds" in rq_args, 'Missing request argument "ds"'
+        ds_name = rq_args["ds"]
+        patterns = self.mApp.getOption("auto-drop-datasets")
+        if patterns is None:
+            patterns = []
+        for pattern in patterns:
+            if re.search(pattern, ds_name):
+                logging.info(f"Drop dataset {ds_name} by rule '{pattern}'")
+                self.unloadDS(ds_name)
+                shutil.rmtree(self.mVaultDir + '/' + ds_name)
+                self.scanAll()
+                return "Dropped " + ds_name
+        assert False, (f"Drop dataset {ds_name} failed: "
+            + "no appropriate pattern in 'auto-drop-datasets' config option")
+        return None

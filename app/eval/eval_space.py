@@ -21,12 +21,14 @@ import abc, json
 from hashlib import md5
 
 from .condition import ConditionMaker
+from .variety import VarietyUnit
 #===============================================
 class EvalSpace:
     def __init__(self, ds_h):
         self.mDS = ds_h
         self.mUnits = []
         self.mUnitDict = dict()
+        self.mFunctions = []
 
     def getDS(self):
         return self.mDS
@@ -45,11 +47,23 @@ class EvalSpace:
     def iterZygUnits(self):
         assert False
 
+    def iterFunctions(self):
+        return iter(self.mFunctions)
+
     def _addUnit(self, unit_h, force_it = False):
+        if unit_h.getMean() == "pre-variety":
+            self._addReservedUnit(unit_h)
+            variety_h = VarietyUnit(unit_h)
+            self._addUnit(variety_h)
+            return
+
         self.mUnits.append(unit_h)
         assert force_it or unit_h.getName() not in self.mUnitDict, (
             "Duplicate unit name: " + unit_h.getName())
         self.mUnitDict[unit_h.getName()] = unit_h
+
+        if unit_h.getMean() == "variety":
+            self._addUnit(unit_h.getPanelUnit())
 
     def _insertUnit(self, unit_h,
             before = None, after = None, insert_idx = None):
@@ -79,6 +93,16 @@ class EvalSpace:
             "Duplicate meta unit name: " + meta_unit_h.getName())
         self.mUnitDict[meta_unit_h.getName()] = meta_unit_h
 
+    def _addFunction(self, unit_h):
+        # temporary hack: unit is already added as unit
+        if True:
+            assert unit_h.getName() in self.mUnitDict
+        else:
+            assert unit_h.getName() not in self.mUnitDict, (
+                "Duplicate function unit name: " + unit_h.getName())
+            self.mUnitDict[unit_h.getName()] = unit_h
+        self.mFunctions.append(unit_h)
+
     def getUnit(self, unit_name):
         return self.mUnitDict.get(unit_name)
 
@@ -97,18 +121,32 @@ class EvalSpace:
             ret = ret.addOr(cond)
         return ret
 
+    def getUsedDimValues(self, eval_h, dim_name):
+        ret = set()
+        for unit_h in self.mUnits:
+            if unit_h.getDimName() == dim_name:
+                ret |= eval_h.getUsedEnumValues(unit_h.getName())
+        return ret
+
 #===============================================
 class Eval_Condition:
     def __init__(self, eval_space, cond_type, name = None):
         self.mEvalSpace = eval_space
         self.mCondType = cond_type
         self.mName = name
+        self.mPreForm = None
+
+    def setPreForm(self, pre_data):
+        self.mPreForm = pre_data
 
     def getEvalSpace(self):
         return self.mEvalSpace
 
     def getCondType(self):
         return self.mCondType
+
+    def getPreForm(self):
+        return self.mPreForm
 
     def __not__(self):
         assert False

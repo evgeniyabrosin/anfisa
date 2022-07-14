@@ -144,6 +144,9 @@ class CheckPoint:
         line_from, line_to = self.mFrag.getLineDiap()
         return "\n".join(code_lines[line_from - 1: line_to - 1])
 
+    def visit(self, visitor):
+        pass
+
 #===============================================
 class LabelPoint(CheckPoint):
     def __init__(self, story, frag, prev_point):
@@ -241,6 +244,10 @@ class ConditionPoint(CheckPoint):
         #  , "label", "comment"]
         return ret
 
+    def visit(self, visitor):
+        if self.mCondition is not None:
+            self.mCondition.visit(visitor)
+
 #===============================================
 class DTreeEval(Evaluation, CaseStory):
     def __init__(self, eval_space, dtree_code, dtree_name = None,
@@ -301,17 +308,15 @@ class DTreeEval(Evaluation, CaseStory):
 
     def operationError(self, cond_data, err_msg):
         Evaluation.operationError(self, cond_data, err_msg)
-        for atom_info in self.mFragments[self.getCurPointNo()].getCondAtoms():
-            if cond_data is atom_info.getCondData():
-                atom_info.setError(err_msg)
-                return
-        assert False, "Condition atom not found: " + str(cond_data)
+        self.mFragments[self.getCurPointNo()]._setAtomError(cond_data, err_msg)
 
     def locateCondData(self, cond_data):
-        for atom_info in self.mFragments[self.getCurPointNo()].getCondAtoms():
-            if cond_data is atom_info.getCondData():
-                return self.getCurPointNo(), atom_info.getErrorMsg()
-        assert False, "Condition not found: " + json.dumps(cond_data)
+        for idx, frag_h in enumerate(self.mFragments):
+            atom_h = frag_h._getAtom(cond_data, is_optional = True)
+            if atom_h is not None:
+                return idx, atom_h
+        assert False, "Condition not found: " + json.dumps(cond_data,
+            sort_keys = True)
         return None
 
     def __len__(self):
@@ -353,15 +358,20 @@ class DTreeEval(Evaluation, CaseStory):
 
     def reportInfo(self):
         atom_seq = []
-        atom_dict = {}
+        atom_dict, atom_err_dict = dict(), dict()
         for point in self.mPointList:
-            cond_seq = []
+            cond_seq, error_dict = [], dict()
             for atom_idx, atom_info in enumerate(point.getCondAtoms()):
+                atom_err = atom_info.getErrorMsg()
                 atom_seq.append((point.getPointNo(), atom_idx,
-                    atom_info.getLoc(), atom_info.getErrorMsg()))
+                    atom_info.getLoc(), atom_err))
                 cond_seq.append(atom_info.getCondData())
+                if atom_err:
+                    error_dict[atom_idx] = atom_err
             if len(cond_seq) > 0:
                 atom_dict[point.getPointNo()] = cond_seq
+            if len(error_dict) > 0:
+                atom_err_dict[point.getPointNo()] = error_dict
         html_lines = self._decorCode(atom_seq)
         ret_handle = {
             "points": [point.getInfo(html_lines) for point in self.mPointList],
@@ -370,6 +380,8 @@ class DTreeEval(Evaluation, CaseStory):
             "code": self.mCode,
             "hash": self.mHashCode,
             "eval-status": self.getEvalStatus()}
+        if len(atom_err_dict) > 0:
+            ret_handle["err-atoms"] = atom_err_dict
         if self.mErrorInfo:
             ret_handle.update(self.mErrorInfo)
         if self.mDTreeName:
@@ -442,3 +454,8 @@ class DTreeEval(Evaluation, CaseStory):
             if frag_h.getInstrType() == "If":
                 ret |= condDataUnits(frag_h.getCondData())
         return ret
+
+    def visitAll(self, visitor):
+        for point in self.mPointList:
+            if point.isActive():
+                point.visit(visitor)

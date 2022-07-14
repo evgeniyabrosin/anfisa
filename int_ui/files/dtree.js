@@ -59,7 +59,7 @@ var sDecisionTree = {
     mPostTreeAction: null,
     
     setup: function(tree_code, instr, dtree_name) {
-        args = "ds=" + sDSName + "&tm=0";
+        args = "ds=" + sDSName + "&tm=0&actsym=1";
         if (tree_code == true)
             tree_code = this.mTreeCode;
         if (tree_code != false)
@@ -222,10 +222,12 @@ var sDecisionTree = {
         this._highlightCondition(false);
     },
 
-    getTreeRqArgs: function() {
+    getTreeRqArgs: function(use_id) {
         args = "ds=" + sDSName + "&no=" + 
             ((this.mCurPointNo == null)? -1:this.mCurPointNo)  +
             "&code=" + encodeURIComponent(this.mTreeCode);
+        if (use_id)
+            args += "&rq_id=" + encodeURIComponent(this.mRqId);
         return args;
     },
     
@@ -234,9 +236,8 @@ var sDecisionTree = {
             eval(post_tree_action);
             return;
         }
-        var args = this.getTreeRqArgs() +
-            "&points=" + encodeURIComponent(JSON.stringify(this.mPointDelay)) + 
-            "&rq_id=" + encodeURIComponent(this.mRqId);
+        var args = this.getTreeRqArgs(true) +
+            "&points=" + encodeURIComponent(JSON.stringify(this.mPointDelay));
         if (!post_tree_action)
             args += "&tm=1";
         else
@@ -311,7 +312,7 @@ var sDecisionTree = {
         }
         if (this.mCurPointNo == point_no) 
             return;
-        if (sUnitsH.postAction(
+        if (sEvalCtrlH.postAction(
             'sDecisionTree.selectPoint(' + point_no + ');', true))
             return;
         sViewH.modalOff();
@@ -331,7 +332,7 @@ var sDecisionTree = {
     
     atomEdit: function(point_no, atom_idx) {
         this.selectPoint(point_no);
-        if (sUnitsH.postAction(
+        if (sEvalCtrlH.postAction(
                 'sDecisionTree.atomEdit(' + point_no + ', ' + atom_idx + ');', true))
             return;
         this.mCondAtomLoc = [point_no, atom_idx];
@@ -341,7 +342,7 @@ var sDecisionTree = {
     
     atomDrop: function(point_no, atom_idx) {
         this.selectPoint(point_no);
-        if (sUnitsH.postAction(
+        if (sEvalCtrlH.postAction(
                 'sDecisionTree.atomDrop(' + point_no + ', ' + atom_idx + ');', true))
             return;
         if (this.mCondAtoms[point_no].length > 1) {
@@ -396,7 +397,8 @@ var sDecisionTree = {
             if (cur_point["level"] == 0)
                 actions = ["point-insert"];
             else
-                actions = ["point-up-join-and", "point-up-replace"];
+                actions = ["point-up-join-and", 
+                    "point-up-join-or", "point-up-replace"];
         } else {
             if (cur_point["kind"] == "If") 
                 actions = ["point-replace", "point-insert", 
@@ -446,171 +448,49 @@ var sDecisionTree = {
 
 /**************************************/
 var sUnitsH = {
-    mDivList: null,
-    mItems: null,
-    mFilteredCounts: null,
-    mTotalCounts: null,
-    mUnitMap: null,
-    mCurUnit: null,
-    mWaiting: false,
-    mPostAction: null,
-    mRqId: null,
-    mUnitsDelay: null,
-    mTimeH: null,
-    mCurFuncName: null,
-    
     init: function() {
-        this.mDivList = document.getElementById("stat-list");
     },
     
     setup: function() {
+        sEvalCtrlH.waitForSetup();
         var args = sDecisionTree.getTreeRqArgs() + "&tm=0";
-        this.mRqId = false;
-        if (this.mTimeH != null) {
-            clearInterval(this.mTimeH);
-            this.mTimeH = null;
-        }
-        this.mDivList.className = "wait";
-        this.mWaiting = true;
         ajaxCall("dtree_stat", args, function(info){sUnitsH._setup(info);})
     },
 
-    postAction: function(action, no_wait) {
-        if (!no_wait || this.mWaiting) {
-            if (this.mPostAction) 
-                this.mPostAction += "\n" + action;
-            else
-                this.mPostAction = action;
-            return true;
-        }
-        return false;
-    },
-    
     _setup: function(info) {
-        this.mWaiting = false;
-        this.mRqId  = info["rq-id"];
-        this.mFilteredCounts = info["filtered-counts"];
-        this.mTotalCounts = info["total-counts"];
-        document.getElementById("list-report").innerHTML = 
-            (this.mFilteredCounts[0] == this.mTotalCounts[0])?
-                this.mTotalCounts[0] : 
-                this.mFilteredCounts[0] + "/" + this.mTotalCounts[0];
-        sSubVRecH.reset(this.mFilteredCounts[0]);
-            
-        this.mItems = [];
-        for (var idx=0; idx < info["stat-list"].length; idx++) {
-            if (sOpFuncH.notSupported(info["stat-list"][idx]))
-                continue;
-            this.mItems.push(info["stat-list"][idx]);
-        }
-        this.mUnitMap = {};
-        this.mUnitsDelay = [];
-        var list_stat_rep = [];
-        fillStatList(
-            this.mItems, this.mUnitMap, list_stat_rep, this.mUnitsDelay, 
-            1, "sDecisionTree.showUnitCond");
-        this.mDivList.className = "";
-        this.mCurUnit = null;        
-        this.mCurFuncName = null;
-        
-        this.mDivList.innerHTML = list_stat_rep.join('\n');
-        sUnitClassesH.updateItems(this.mItems);
-
-        
-        if (this.mCurUnit == null)
-            this.selectUnit(this.mItems[0]["name"]);
-        
-        this.checkDelayed();
+        var prev_cur_name = sEvalCtrlH.getCurUnitName();
+        sEvalCtrlH._startSetup(info, sSubVRecH, 1, "sDecisionTree.showUnitCond");
+        this.selectUnit(sEvalCtrlH.chooseCurName(prev_cur_name), true);
+        sEvalCtrlH.checkDelayed();
     },
 
-    checkDelayed: function() {
-        var post_action = this.mPostAction;
-        this.mPostAction = null;
-        if (post_action)
-            eval(post_action);
-        if (this.mWaiting || this.mTimeH != null || this.mUnitsDelay.length == 0)
-            return;
-        this.mTimeH = setInterval(function(){sUnitsH.loadUnits();}, 50);
-    },
-    
     getRqArgs: function(use_id) {
         ret = sDecisionTree.getTreeRqArgs();
         if (use_id)
-            ret += "&rq_id=" + encodeURIComponent(this.mRqId);
+            ret += sEvalCtrlH.argRqId();
         return ret;
     },
     
     loadUnits: function() {
-        clearInterval(this.mTimeH);
-        this.mTimeH = null;
-        if (this.mWaiting || this.mUnitsDelay.length == 0)
-            return;
-        this.mWaiting = true;
-        this.sortVisibleDelays();
-        ajaxCall("statunits", this.getRqArgs() + 
-            "&tm=1" + "&rq_id=" + encodeURIComponent(this.mRqId) + 
-            "&units=" + encodeURIComponent(JSON.stringify(this.mUnitsDelay)),
+        sEvalCtrlH.waitForLoad();
+        ajaxCall("statunits", 
+            this.getRqArgs(true) + "&tm=1" + sEvalCtrlH.argDelays(),
             function(info){sUnitsH._loadUnits(info);})
     },
     
-    _unitDivEl: function(unit_name) {
-        return document.getElementById("stat--" + unit_name);
-    },
-    
     _loadUnits: function(info) {
-        if (info["rq-id"] != this.mRqId) 
-            return;
-        this.mWaiting = false;
-        el_list = document.getElementById("stat-list");
-        var cur_el = (this.mCurUnit)? this._unitDivEl(this.mCurUnit): null;
-        if (cur_el)
-            var prev_top = cur_el.getBoundingClientRect().top;
-        var prev_unit = this.mCurUnit;
-        var prev_h =  (this.mCurUnit)? topUnitStat(this.mCurUnit):null;
-        for (var idx = 0; idx < info["units"].length; idx++) {
-            unit_stat = info["units"][idx];
-            refillUnitStat(unit_stat, 1);
-            unit_name = unit_stat["name"];
-            var pos = this.mUnitsDelay.indexOf(unit_name);
-            if (pos >= 0)
-                this.mUnitsDelay.splice(pos, 1);
-            this.mItems[this.mUnitMap[unit_name]] = unit_stat;
-            if (this.mCurUnit == unit_name)
-                this.selectUnit(unit_name, true);
-            if (cur_el) {
-                cur_top = cur_el.getBoundingClientRect().top;
-                el_list.scrollTop += cur_top - prev_top;
-            }
-            sOpCondH.checkDelay(unit_name);
-        }
-        this.checkDelayed();
-    },
-    
-    getUnitStat: function(unit_name) {
-        this.checkUnitDelay(unit_name);
-        return this.mItems[this.mUnitMap[unit_name]];
-    },
-    
-    checkUnitDelay: function(unit_name) {
-        var pos = this.mUnitsDelay.indexOf(unit_name);
-        if (pos >= 0) {
-            this.mUnitsDelay.splice(pos, 1);
-            this.mUnitsDelay.splice(0, 0, unit_name);
-        }
-        if (pos >= 0) 
-            this.checkDelayed();
+        sEvalCtrlH.loadUnits(info, 1, sOpCondH);
     },
     
     selectUnit: function(stat_unit, force_it) {
-        this.checkUnitDelay(stat_unit);
+        sEvalCtrlH.checkUnitDelay(stat_unit);
+        sEvalCtrlH.setCurUnit(stat_unit);
+        if (force_it == "func")
+            sDecisionTree.showUnitCond(stat_unit);
     },
     
-    updateFuncUnit: function(unit_name, unit_stat) {
-        if (this.mCurFuncName != null) {
-            this.mCurFuncName = unit_name;
-            this.mItems[this.mUnitMap[unit_name]] = unit_stat;
-            this.selectUnit(this.mCurUnit, true);
-        }
+    selectFunction: function() {
+        //TRF: write it
     },
     
     prepareWsCreate: function() {
@@ -626,27 +506,11 @@ var sUnitsH = {
         return "ds=" + sDSName + "&code=" + encodeURIComponent(sDecisionTree.mTreeCode);
     },
 
-    getCurCount: function() {
-        return this.mFilteredCounts[0];
-    },
-    
-    sortVisibleDelays: function() {
-        var view_height = this.mDivList.getBoundingClientRect().height;
-        view_seq = [];
-        hidden_seq = [];
-        for (var idx=0; idx < this.mUnitsDelay.length; idx++) {
-            var rect = this._unitDivEl(this.mUnitsDelay[idx]).getBoundingClientRect();
-            if ((rect.top + rect.height < 0) || (rect.top > view_height))
-                hidden_seq.push(this.mUnitsDelay[idx]);
-            else
-                view_seq.push(this.mUnitsDelay[idx]);
-        }
-        this.mUnitsDelay = view_seq.concat(hidden_seq);
-    },
-
-    checkRqId: function(info) {
-        if (info["rq-id"] != this.mRqId) 
+    infoIsUpToDate: function(info, force_it) {
+        if (!sEvalCtrlH.checkRqId(info))
             return false;
+        if (info["no"] == undefined && !force_it)
+            return true;
         point_no = sDecisionTree.getCurPointNo();
         if (point_no == null)
             point_no = -1;
@@ -664,7 +528,7 @@ var sOpCondH = {
     mCurUnitName: null,
     mActionList: ["atom-set", "atom-delete", "point-delete", 
         "point-insert", "point-replace", "point-join-and", "point-join-or", 
-        "point-up-replace", "point-up-join-and"],
+        "point-up-replace", "point-up-join-and", "point-up-join-or"],
     mCurActions: null,
 
     init: function() {
@@ -694,11 +558,11 @@ var sOpCondH = {
             this.mCurUnitName = this.mCondition[1];
         else
             this.mCurUnitName = unit_name;
-        unit_stat = sUnitsH.getUnitStat(this.mCurUnitName);
+        unit_stat = sEvalCtrlH.getUnitStat(this.mCurUnitName);
         document.getElementById("cond-title").innerHTML = this.mCurUnitName + 
             ((unit_stat["kind"] == "func")? "()" : "");
         mode = "num";
-        if (unit_stat == undefined || unit_stat["incomplete"]) {
+        if (unit_stat === undefined || unit_stat["incomplete"]) {
             this.mCurTpHandler = null;
         } else {
             if (unit_stat["kind"] == "numeric") 
@@ -763,7 +627,6 @@ var sDTreesH = {
     mComboName: null,
     mCurDTreeName: null,
     mCurDTreeInfo: null,
-    mCurDTreeIdx: null,
     mBtnOp: null,
     
     mAllList: [],
@@ -784,13 +647,10 @@ var sDTreesH = {
         this.mOpList = [];
         this.mAllList = [];
         this.mDTreeTimeDict = {};
-        this.mCurDTreeIdx = 0;
         for (idx = 0; idx < dtree_list.length; idx++) {
             dtree_info = dtree_list[idx];
             if (dtree_info["name"] == this.mCurDTreeName)
                 this.mCurDTreeInfo = dtree_info;
-            if (dtree_info["name"] == this.mCurDTreeName)
-                this.mCurDTreeIdx = this.mAllList.length;
             this.mAllList.push(dtree_info["name"]);
             if (!dtree_info["standard"])
                 this.mOpList.push(dtree_info["name"]);
@@ -821,7 +681,8 @@ var sDTreesH = {
             (!!this.mCurDTreeName)? "disabled":"";
         document.getElementById("dtree-op-modify").className = 
             (!!this.mCurDTreeName ||
-                (this.mOpList.length == 0))? "disabled":"";
+                (this.mCurDTreeName && this.mCurDTreeName[0] == '@' ||
+                (this.mOpList.length == 0)))? "disabled":"";
         document.getElementById("dtree-op-delete").className = 
             (!this.mCurDTreeName || 
                 this.mOpList.indexOf(this.mCurDTreeName) < 0)? "disabled":"";
@@ -893,7 +754,7 @@ var sDTreesH = {
         this.mCurOp = "load";
         this.mInpName.value = "";
         this.mInpName.style.visibility = "hidden";
-        this.fillSelNames(false, this.mAllList, this.mCurDTreeIdx);
+        this.fillSelNames(false, this.mAllList, this.mCurDTreeName);
         this.mSelName.disabled = false;
         this.mBtnOp.innerHTML = "Load";
         this.mBtnOp.style.display = "block";
@@ -917,7 +778,8 @@ var sDTreesH = {
     },
 
     startModify: function() {
-        if (sDecisionTree.isEmpty() || this.mCurDTreeName)
+        if (sDecisionTree.isEmpty() || 
+            (this.mCurDTreeName && this.mCurDTreeName[0] == '@'))
             return;
         this.fillSelNames(false, this.mOpList);
         this.mCurOp = "modify";
@@ -963,26 +825,10 @@ var sDTreesH = {
         }
     },
 
-    fillSelNames: function(with_empty, dtree_list, sel_idx) {
+    fillSelNames: function(with_empty, dtree_list, cur_value) {
         if (this.mSelName == null || this.mAllList == null)
             return;
-        for (idx = this.mSelName.length -1; idx >= 0; idx--) {
-            this.mSelName.remove(idx);
-        }
-        if (with_empty) {
-            var option = document.createElement('option');
-            option.innerHTML = "";
-            option.value = "";
-            this.mSelName.append(option)
-        }
-        for (idx = 0; idx < dtree_list.length; idx++) {
-            dtree_name = dtree_list[idx];
-            var option = document.createElement('option');
-            option.innerHTML = dtree_name;
-            option.value = dtree_name;
-            this.mSelName.append(option)
-        }
-        this.mSelName.selectedIndex = (sel_idx)? sel_idx : 0;
+        resetSelectInput(this.mSelName, dtree_list, with_empty, cur_value);
     },
     
     getAllList: function() {
@@ -1354,8 +1200,4 @@ function dropAtom(evt) {
     var atom_id = evt.target.id;
     idxs = atom_id.substring(7).split('-');
     sDecisionTree.atomDrop(parseInt(idxs[0]), parseInt(idxs[1]));
-}
-
-function renderEnum(unit_name, expand_mode) {
-    renderEnumUnitStat(sUnitsH.getUnitStat(unit_name), expand_mode);
 }

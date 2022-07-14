@@ -18,10 +18,11 @@
 #  limitations under the License.
 #
 
-import sys, ast
+import sys, ast, json
 from hashlib import md5
 
 from forome_tools.log_err import logException
+from .condition import ConditionMaker
 from .code_works import normalizeCode
 from .code_parse import parseCodeByPortions
 #===============================================
@@ -70,6 +71,17 @@ class TreeFragment:
     def getCondAtoms(self):
         return self.mCondAtoms
 
+    def _getAtom(self, cond_data, is_optional = False):
+        for atom_info in self.mCondAtoms:
+            if cond_data is atom_info.getCondData():
+                return atom_info
+        assert is_optional, ("Condition atom not found: "
+            + json.dumps(cond_data))
+        return None
+
+    def _setAtomError(self, cond_data, err_msg):
+        self._getAtom(cond_data).setError(err_msg)
+
 #===============================================
 class CondAtomInfo:
     def __init__(self, cond_data, location, warn_msg = None):
@@ -101,14 +113,14 @@ class ParsedDTree:
         self.mDummyLinesReg = set()
         self.mLabels = dict()
         self.mFirstError = None
-        hash_h = md5()
         code_lines = self.mCode.splitlines()
 
         for parsed_d, err_info, line_diap in parseCodeByPortions(
                 code_lines, self.mDummyLinesReg):
             fragments = []
+            if parsed_d is None or len(parsed_d.body) != 1:
+                err_info = ("Improper instruction", line_diap[0], 0)
             if err_info is None:
-                assert len(parsed_d.body) == 1
                 self.mError = None
                 self.mCurLineDiap = line_diap
                 try:
@@ -125,13 +137,6 @@ class ParsedDTree:
                     else:
                         self.errorIt(instr_d,
                             "Instructon must be of if-type")
-                    for frag_h in fragments:
-                        line_from, line_to = frag_h.getLineDiap()
-                        for line_no in range(line_from, line_to):
-                            if line_no not in self.mDummyLinesReg:
-                                hash_h.update(bytes(code_lines[line_no - 1],
-                                    "utf-8"))
-                                hash_h.update(b'\n')
                 except Exception as err:
                     if self.mError is None:
                         logException("Exception on parse tree code")
@@ -143,6 +148,8 @@ class ParsedDTree:
                 if self.mFirstError is None:
                     self.mFirstError = err_info
             self.mFragments += fragments
+        hash_h = md5()
+        hash_h.update(bytes(self.mCode, "utf-8"))
         self.mHashCode = hash_h.hexdigest()
         self.mCurLineDiap = None
         self.mError = None
@@ -330,15 +337,13 @@ class ParsedDTree:
         if isinstance(it.left, ast.Name):
             field_name = it.left.id
             warn_msg = None
-            ret = ["enum", field_name, op_mode, variants]
+            cond_data = ["enum", field_name, op_mode, variants]
             if self.mEvalSpace is not None:
                 unit_h = self.mEvalSpace.getUnit(field_name)
                 if unit_h is None:
                     warn_msg = "Inactive enum field"
-                    if op_mode == "NOT":
-                        ret = []
-                    else:
-                        ret = [None]
+                    cond_data = ConditionMaker.coverError(
+                        cond_data, op_mode == "NOT")
                 else:
                     if not unit_h.isInDTrees():
                         self.errorIt(it.left,
@@ -350,24 +355,22 @@ class ParsedDTree:
                     if unit_h.getUnitKind() != "enum":
                         self.errorIt(it.left, "Improper enum field name: "
                             + field_name)
-            self._regCondAtom(ret, it.left, it.left.id, warn_msg)
-            return ret
+            self._regCondAtom(cond_data, it.left, it.left.id, warn_msg)
+            return cond_data
 
         if isinstance(it.left, ast.Call):
             field_name = it.left.func.id
             func_args, warn_msg = dict(), None
-            ret = ["func", field_name, op_mode, variants, func_args]
+            cond_data = ["func", field_name, op_mode, variants, func_args]
             if self.mEvalSpace is None:
                 # No parameters w/o eval space, parse only
-                del ret[2:]
+                del cond_data[2:]
             else:
                 unit_h = self.mEvalSpace.getUnit(field_name)
                 if unit_h is None:
                     warn_msg = "Inactive function"
-                    if op_mode == "NOT":
-                        ret = []
-                    else:
-                        ret = [None]
+                    cond_data = ConditionMaker.coverError(
+                        cond_data, op_mode == "NOT")
                 elif unit_h.getUnitKind() != "func":
                     self.errorIt(it.left, "Improper functional field name: "
                         + field_name)
@@ -391,8 +394,8 @@ class ParsedDTree:
                     err_msg = unit_h.validateArgs(func_args)
                     if err_msg:
                         self.errorIt(it.left, err_msg)
-            self._regCondAtom(ret, it.left, it.left.func.id, warn_msg)
-            return ret
+            self._regCondAtom(cond_data, it.left, it.left.func.id, warn_msg)
+            return cond_data
         self.errorIt(it.left, "Name of field is expected")
         return None
 
@@ -446,13 +449,13 @@ class ParsedDTree:
         field_node = operands[idx_fld]
         field_name = field_node.id
         bounds = [None, True, None, True]
-        ret = ["numeric", field_name, bounds]
+        cond_data = ["numeric", field_name, bounds]
         warn_msg = None
         if self.mEvalSpace is not None:
             unit_h = self.mEvalSpace.getUnit(field_name)
             if unit_h is None:
                 warn_msg = "Inactive numeric field"
-                ret = [None]
+                cond_data = ConditionMaker.coverError(cond_data)
             elif unit_h.getUnitKind() != "numeric":
                 self.errorIt(operands[idx_fld],
                     "Improper numeric field name: " + field_name)
@@ -482,8 +485,8 @@ class ParsedDTree:
             if ((bounds[0] == bounds[2] and not (bounds[1] and bounds[3]))
                     or bounds[0] > bounds[2]):
                 self.errorIt(it, "Condition never success")
-        self._regCondAtom(ret, field_node, field_name, warn_msg)
-        return ret
+        self._regCondAtom(cond_data, field_node, field_name, warn_msg)
+        return cond_data
 
     #===============================================
     def processInt(self, it):
@@ -493,8 +496,9 @@ class ParsedDTree:
 
     #===============================================
     def processFloat(self, it):
-        if not isinstance(it, ast.Num) or (
-                not isinstance(it.n, int) and not isinstance(it.n, float)):
+        if not isinstance(it, ast.Num):
+            self.errorIt(it, "Numeric is expected: %r" % it)
+        if (not isinstance(it.n, int) and not isinstance(it.n, float)):
             self.errorIt(it, "Int or float is expected: %r" % it.n)
         return it.n
 

@@ -20,12 +20,12 @@
 
 import os, logging
 from glob import glob
-from app.config.a_config import AnfisaConfig
 from app.eval.condition import ConditionMaker
 from app.model.sol_pack import SolutionPack
+from app.model.sol_support import StdNameSupport
 from app.model.tab_report import ReportTabSchema
 from .favor import FavorSchema
-import app.config.view_tune as view_tune
+from app.config.view_op_tune import prepareSeqColorTransform
 #===============================================
 sCfgFilePath = os.path.dirname(os.path.abspath(__file__)) + "/files/"
 
@@ -36,12 +36,8 @@ def cfgPath(fname):
 def cfgPathSeq(fnames):
     return [cfgPath(fname) for fname in fnames]
 
-
-#===============================================
-sStdFMark = AnfisaConfig.configOption("filter.std.mark")
 def stdNm(name):
-    global sStdFMark
-    return sStdFMark + name
+    return StdNameSupport.stdNm(name)
 
 
 #===============================================
@@ -343,7 +339,7 @@ def setupSolutions_Case(app_config, base_pack):
     #     [cfgPath("hearing_loss.pyt")])
 
     base_pack.regZone("Gene", "Symbol")
-    base_pack.regZone("Gene List", "Panels")
+    base_pack.regZone("Gene List", "Gene_Lists")
     base_pack.regZone("Sample", "Has_Variant")
     base_pack.regZone("Cohort", "Variant_in",  requires = {"cohorts"})
     base_pack.regZone("Tag", "_tags")
@@ -425,18 +421,18 @@ def setupGenericPack(app_config, base_pack):
     xbr_tab_schema.addField("Protein Change", "/_view/general/ppos_canonical")
     xbr_tab_schema.addField("Polyphen2_HVAR",
         "/_view/predictions/polyphen2_hvar",
-        view_tune.makeSeqColorTransform(view_tune.Polyphen_ColorCode))
+        prepareSeqColorTransform("Polyphen"))
     xbr_tab_schema.addField("Polyphen2_HDIV",
         "/_view/predictions/polyphen2_hdiv",
-        view_tune.makeSeqColorTransform(view_tune.Polyphen_ColorCode))
+        prepareSeqColorTransform("Polyphen"))
     xbr_tab_schema.addField("SIFT",
         "/_view/predictions/sift",
-        view_tune.makeSeqColorTransform(view_tune.SIFT_ColorCode))
+        prepareSeqColorTransform("SIFT"))
     xbr_tab_schema.addField("MUT TASTER",
         "/_view/predictions/mutation_taster",
-        view_tune.makeSeqColorTransform(view_tune.MutationTaster_ColorCode))
+        prepareSeqColorTransform("MutationTaster"))
     xbr_tab_schema.addField("FATHMM", "/_view/predictions/fathmm",
-        view_tune.makeSeqColorTransform(view_tune.FATHMM_ColorCode))
+        prepareSeqColorTransform("FATHMM"))
 
     xbr_tab_schema.addField("gnomAD_Overall_AF", "/_filters/gnomad_af_fam")
     xbr_tab_schema.addField("gnomAD_Overall_AF_Popmax",
@@ -480,17 +476,6 @@ def setupInstanceSolutions(app_config, base_pack):
 
 
 #===============================================
-def completeDsModes(ds_h):
-    if ds_h.getDataSchema() == "CASE":
-        family_info = ds_h.getFamilyInfo()
-        trio_seq = family_info.getTrioSeq()
-        if trio_seq:
-            ds_h.addModes({"trio"})
-            if trio_seq[0][0] == "Proband":
-                ds_h.addModes({"trio_base"})
-                if len(family_info) == 3:
-                    ds_h.addModes({"trio_pure"})
-        if ds_h.getDataInfo()["meta"].get("cohorts"):
-            ds_h.addModes({"cohorts"})
-    elif ds_h.getDataSchema() == "FAVOR":
-        FavorSchema.completeDsModes(ds_h)
+def startTune(ds_h):
+    if ds_h.getDataSchema() == "FAVOR":
+        FavorSchema.startTune(ds_h)

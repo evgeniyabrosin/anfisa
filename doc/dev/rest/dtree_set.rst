@@ -20,9 +20,12 @@ Synopsis
 
         **code**: *optional* code of applying decision tree 
         
+        **actsym**: *optional*, add gene symbols from filter to :ref:`active symbols<actsym_purpose>` , 
+            *recommended in form* ``actsym=1``
+
         **instr**: *optional modifier* :doc:`s_dtree_instr`
                    *in JSON string representation*
-        
+
     **Return value**: 
     
     | ``{`` *dictionary*
@@ -42,6 +45,11 @@ Synopsis
     |           ``{`` *dictionary* 
     |                 point no, *int*: ``[`` *list of* :doc:`s_condition` ``]``
     |           ``}``
+    |      "**err-atoms**": *optional* atomic errors
+    |           ``{`` *dictionary* 
+    |                 point no *int*: 
+    |                   ``{`` atom idx *int*: *string* ``}``
+    |           ``}``
     |      "**labels**": ``[`` *list of string* ``]`` - defined state labels 
     |        
     |      "**error**": *optional* diagnostics for first error, *string*
@@ -54,6 +62,7 @@ Synopsis
     |      **hash**: hash code associated with current tree code, *string*
     |      **dtree-list**: names of all decision trees available for dataset
     |           ``[`` *list of* :doc:`s_sol_entry` ``]``
+    |      **dtree-sol-version**: :ref:`indicator of state<sol_version_indicators>` for decision trees
     |      **rq_id**": unique request id, for use in secondary requests, *string*
     |  ``}``
     
@@ -81,6 +90,8 @@ Returning properties:
     
         Atoms are indexed by pair of integers: index of point and index in list of point atoms, so property **cond-atoms** is organized as dictionary with integer keys(indexes of points of type ``"If"``) and values as list of :doc:`s_condition` structures.
     
+    **err-atoms**: Presents only if some atomic conditions in the tree are broken. Only essential indexes are filled with error messages. 
+    
     **labels**: The property contains all :term:`state labels<decision tree state label>` defined on decision tree, it might be used for rendering purposes.
         
     **error**, **line**, **pos**: in case of errors in code of decision tree, these tree properties refer first error in the code, it might be used in rendering or work with code of decision tree
@@ -92,6 +103,9 @@ Returning properties:
 Comments
 --------
 The request is partial analogue to :doc:`ds_stat`. Both methods are principal for support main :ref:`work pages<work_pages>` for two mechanisms of :term:`filtration` in the system.
+
+Inside instruction atom can be in an improper state, and there is error message in **err-atoms** for this case, and the Front End needs to show them. In some cases (usually if property name is not supported in dataset, or has improper type) the atom can be blocked. Only deletion of such atom is a proper operation. For blocked atoms the correspondent coindition in **cond-atoms** starts (leading element of top list) with ``"error"`` instruction, see 
+details :ref:`here<error_condition>`.
 
 See also
 --------

@@ -86,14 +86,27 @@ The location of the vault directory::
         "job-vault-check-period": 30,
         
 .. index:: 
-    http-bam-base; service configuration option
+    igv-dir; service configuration option
     
-* **http-bam-base**, *string*
+* **igv-dir**, *string*
     
-HTTP base directory for access to BAM-files, used in IGV-links. Uncomment this option and set it up correctly if the server provides access to BAM-files, otherwise keep it commented::
+Location of file with configuration of access to BAM-files, used in IGV-links. See discussion here: :ref:`IGV direct support<IGV_direct_support>`. ::
     
-    "http-bam-base": “http://<server>/anfisa/links/"`
+    "igv-dir": "${HOME}/igv.dir",
 
+.. index::
+    auto-drop-datasets; service coinfiguration option
+    
+.. _adm_drop_datasets:
+    
+* **auto-drop-datasets**, *list of strings*
+
+The option determines dataset names that can be dropped automatically via request :doc:`../rest/adm_drop_ds`. There can be multiple patterns in list, and dataset name is good for drop if any of patterns appears in its name. Patterns should be correct Python regular expressions::
+
+    "auto-drop-datasets": ["(?i)test"]
+    
+  (Example shows the case when dataset name should contain substring "test" in ignorecase mode) 
+    
 .. index:: 
     solutions; service configuration option
 
@@ -226,7 +239,7 @@ Additional solutions configuration, only gene panels (based on Symbol) are suppo
         {
             "id": "dev",
             "title": "Anfisa Installation&Administration Documentation",
-            "url": "https://foromeplatform.github.io/documentation/anfisa-dev.v0.6/",
+            "url": "https://foromeplatform.github.io/documentation/anfisa-dev.v0.7/",
             "source": "${HOME}/doc/dev/",
             "build": "${WORK}/doc/dev/",
             "path": "doc/dev/"
@@ -234,7 +247,7 @@ Additional solutions configuration, only gene panels (based on Symbol) are suppo
         {
             "id": "user",
             "title": "Anfisa User Documentation",
-            "url": "https://foromeplatform.github.io/documentation/anfisa-user.v0.6/",
+            "url": "https://foromeplatform.github.io/documentation/anfisa-user.v0.7/",
             "source": "${HOME}/doc/user/",
             "build": "${WORK}/doc/user/",
             "path": "doc/user/"

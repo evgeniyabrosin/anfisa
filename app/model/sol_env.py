@@ -24,7 +24,11 @@ from app.config.a_config import AnfisaConfig
 
 #===============================================
 class SolutionEnv:
-    sSolKeys = ["filter", "dtree", "tags"]
+    sSolKeys = ["filter", "dtree", "panel.Symbol", "tags"]
+
+    @classmethod
+    def getSolKeys(cls):
+        return cls.sSolKeys
 
     def __init__(self, mongo_connector, name):
         self.mName = name
@@ -73,12 +77,23 @@ class SolutionEnv:
     def setTagsData(self, rec_key, tags_data):
         pass
 
+    def dumpAll(self):
+        ret = []
+        for rec_obj in self.mMongoAgent.find():
+            if rec_obj["_tp"] in self.sSolKeys:
+                rec = dict()
+                for key, val in rec_obj.items():
+                    if key != "_id":
+                        rec[key] = val
+                ret.append(rec)
+        return ret
+
 #===============================================
 class _SolKindMongoHandler:
     sDefaultNone = (None, None, None)
 
     def __init__(self, sol_kind, mongo_agent):
-        self.mSolKind = sol_kind
+        self.mSolKind = sol_kind.replace('.', '_')
         self.mMongoAgent = mongo_agent
         self.mData = dict()
         self.mIntVersion = 0
@@ -87,7 +102,7 @@ class _SolKindMongoHandler:
             self.mData[name] = [it[self.mSolKind],
                 AnfisaConfig.normalizeTime(it.get("time")), it["from"]]
 
-    def getSolKind(self):
+    def _getSolKind(self):
         return self.mSolKind
 
     def getIntVersion(self):

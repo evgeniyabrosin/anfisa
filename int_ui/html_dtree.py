@@ -115,7 +115,7 @@ def _formPanel(output):
         </div>
         <div id="dtree-unit-classes">
             <span id="unit-classes-state"></span>
-            <button onclick="sUnitClassesH.show();"
+            <button onclick="sEvalCtrlH.show();"
                 title="Select filtration properties in work">&#9745;</button>
         </div>
       </div>
@@ -125,6 +125,13 @@ def _formPanel(output):
           </div>
         </div>
         <div id="panel-stat">
+          <div id="function-list">
+            <span class="note">Functions:</span>
+            <select id="function-name-select"
+                onchange="sEvalCtrlH.checkFunctionSelect();">
+                <option value=""></option>
+            </select>
+          </div>
           <div id="stat-list" class="list-items">
           </div>
         </div>
@@ -165,7 +172,11 @@ def _formCurCondDiv(output):
                 </button>
                 <button id="cond-button-point-up-join-and" title=
                     "Join the condition to upper instruction by and-operation"
-                    onclick="modifyDTree('POINT', 'UP-JOIN-AND');"> Join as AND
+                    onclick="modifyDTree('POINT', 'UP-JOIN-AND');"> Join by AND
+                </button>
+                <button id="cond-button-point-up-join-or" title=
+                    "Join the condition to upper instruction by or-operation"
+                    onclick="modifyDTree('POINT', 'UP-JOIN-OR');"> Join by OR
                 </button>
                 &emsp;&emsp;
                 <button id="cond-button-point-replace"

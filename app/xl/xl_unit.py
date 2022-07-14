@@ -66,10 +66,22 @@ class XL_NumUnit(XL_Unit, NumUnitSupport):
         if condition is not None:
             cond_repr = condition.getDruidRepr()
             if cond_repr is False:
-                return [None, None, 0]
+                return None
             if cond_repr is not None:
                 query["filter"] = cond_repr
         return query
+
+    @classmethod
+    def count2rank(cls, count):
+        if count < 4096:
+            return 16384
+        if count < 8192:
+            return 8192
+        if count < 16384:
+            return 2048
+        if count < 32768:
+            return 512
+        return 128
 
     def _prepareHistogram(self, druid_agent, query, v_min, v_max, count):
         if self.getEvalSpace().noHistogram():
@@ -78,11 +90,12 @@ class XL_NumUnit(XL_Unit, NumUnitSupport):
         h_info = h_builder.getInfo()
         if h_info is None:
             return None
+
         query["aggregations"] = [{
             "type": "quantilesDoublesSketch",
             "name": "__sketch__",
             "fieldName": self.getInternalName(),
-            "k": 128}]
+            "k": self.count2rank(count)}]
         query["postAggregations"] = [
             {
                 "type": "quantilesDoublesSketchToHistogram",
@@ -105,15 +118,18 @@ class XL_NumUnit(XL_Unit, NumUnitSupport):
         h_info[3] = rq[0]["result"]["__hist"]
         return h_info
 
-    def makeStat(self, condition, eval_h):
+    def makeStat(self, condition, eval_h, stat_ctx):
         druid_agent = self.getEvalSpace().getDruidAgent()
         query = self._makeQuery(druid_agent, condition)
-        rq = druid_agent.call("query", query)
-        v_min, v_max, count = [rq[0]["result"][nm] for nm in
-            ("__min", "__max", "__count")]
+        if query is not None:
+            rq = druid_agent.call("query", query)
+            v_min, v_max, count = [rq[0]["result"][nm] for nm in
+                ("__min", "__max", "__count")]
+        else:
+            v_min, v_max, count = None, None, 0
         h_info = self._prepareHistogram(
             druid_agent, query, v_min, v_max, count)
-        ret_handle = self.prepareStat()
+        ret_handle = self.prepareStat(stat_ctx)
         ret_handle["counts"] = [count]
         if h_info is not None:
             ret_handle["histogram"] = h_info
@@ -173,7 +189,7 @@ class XL_EnumUnit(XL_Unit, EnumUnitSupport):
         return [[var, counts.get(var, 0)]
             for var in self.mVariants]
 
-    def makeStat(self, condition, eval_h):
-        ret_handle = self.prepareStat()
+    def makeStat(self, condition, eval_h, stat_ctx):
+        ret_handle = self.prepareStat(stat_ctx)
         ret_handle["variants"] = self._makeStat(condition)
         return ret_handle

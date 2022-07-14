@@ -1,8 +1,16 @@
-version: "2.2"
+version: "3.8"
+networks:
+  default:
+    driver: bridge
+    name: anfisa_default
+    ipam:
+      driver: default
+      config:
+      - subnet:  172.23.0.0/16
 
 services:
   anfisa:
-    container_name: anfisa6
+    container_name: anfisa7
     image: anfisa_docker_example:latest
     user: root
     volumes:
@@ -13,12 +21,15 @@ services:
     restart: always
     ports:
       - "9010:80"
+    hostname: anfisa7
+    networks:
+      default:
+        ipv4_address: 172.23.0.4
     command:
       - "/usr/local/bin/supervisord"
       
-
   mongo:
-    container_name: anfisa6-mongo
+    container_name: anfisa7-mongo
     user: root
     image: mongo
     ports:
@@ -28,7 +39,7 @@ services:
       - setup/environment
 
   zookeeper:
-    container_name: anfisa6-zookeeper
+    container_name: anfisa7-zookeeper
     image: zookeeper:3.5
     user: root
     ports:
@@ -43,7 +54,7 @@ services:
 
   coordinator:
     image: apache/druid:0.19.0
-    container_name: anfisa6-coordinator
+    container_name: anfisa7-coordinator
     user: root
     volumes:
       - DRUID_WORK/data/:/opt/data/
@@ -63,7 +74,7 @@ services:
 
   broker:
     image: apache/druid:0.19.0
-    container_name: anfisa6-broker
+    container_name: anfisa7-broker
     user: root
     volumes:
       - DRUID_WORK/broker:/opt/druid/var
@@ -85,7 +96,7 @@ services:
 
   historical:
     image: apache/druid:0.19.0
-    container_name: anfisa6-historical
+    container_name: anfisa7-historical
     volumes:
       - DRUID_WORK/data/:/opt/data/
       - DRUID_WORK/historical-var/:/opt/druid/var/
@@ -108,7 +119,7 @@ services:
 
   middlemanager:
     image: apache/druid:0.19.0
-    container_name: anfisa6-middlemanager
+    container_name: anfisa7-middlemanager
     user: root
     volumes:
       - DRUID_WORK/data/:/opt/data/
@@ -133,7 +144,7 @@ services:
 
   router:
     image: apache/druid:0.19.0
-    container_name: anfisa6-router
+    container_name: anfisa7-router
     user: root
     volumes:
       - DRUID_WORK/router/:/opt/druid/var
@@ -150,3 +161,13 @@ services:
     env_file:
       - setup/environment
     restart: always
+
+  anfisa-react-client:
+    container_name: anfisa-react-client
+    user: root
+    build:
+      context: .
+      dockerfile: setup/Dockerfile_front
+    restart: always
+    ports:
+      - "3000:80"

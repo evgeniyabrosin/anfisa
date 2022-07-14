@@ -36,7 +36,7 @@ var sViewAllTranscripts = [true];
 /*************************************/
 /* Utilities                         */
 /*************************************/
-function ajaxCall(rq_name, args, func_eval, error_msg) {
+function ajaxCall(rq_name, args, func_eval, error_msg, multipart_mode) {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
@@ -50,7 +50,10 @@ function ajaxCall(rq_name, args, func_eval, error_msg) {
         }
     };
     xhttp.open("POST", rq_name, true);
-    xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    if (multipart_mode)
+        xhttp.setRequestHeader("Accept", "multipart/form-data");
+    else
+        xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
     xhttp.send(args); 
 }
 
@@ -132,13 +135,63 @@ function softScroll(nd, upper_level) {
     if (rect.top - 10 < rect_parent.top ||
             rect.top + rect.height + 10 >  rect_parent.top + rect_parent.height) {
         nd.scrollIntoView(
-            {behavior: 'auto', block: 'start', inline: 'center'});
+            {behavior: 'auto', block: 'start'}); // inline: 'center'
     }
 }
 
 /*************************************/
+function pushKey(the_list, the_key) {
+    if (the_list.indexOf(the_key) < 0) {
+        the_list.push(the_key);
+    }
+    return the_list;
+}
+
+function popKey(the_list, the_key) {
+    while (true) {
+        rm_idx = the_list.indexOf(the_key);
+        if (rm_idx < 0)
+            break;
+        the_list.splice(rm_idx, 1);
+    }
+    return the_list;
+}
+
+function pushKeyToStr(the_str, the_key) {
+    return pushKey(the_str.split(' '), the_key).join(' ');
+}
+
+function popKeyFromStr(the_str, the_key) {
+    return popKey(the_str.split(' '), the_key).join(' ');
+}
+
+/*************************************/
+function _mkOption(value) {
+    var option = document.createElement('option');
+    option.innerHTML = value;
+    option.value = value;
+    return option;
+}
+
+function resetSelectInput(sel_el, values, with_empty, cur_value) {
+    for (idx = sel_el.length - 1; idx >= 0; idx--) {
+        sel_el.remove(idx);
+    }
+    var idx_shift = 0;
+    if (with_empty) {
+        sel_el.append(_mkOption(""));
+        idx_shift = 1;
+    }
+    for (idx = 0; idx < values.length; idx++) {
+        sel_el.append(_mkOption(values[idx]));
+    }
+    
+    sel_el.selectedIndex = Math.max(0, values.indexOf(cur_value) + idx_shift);
+}
+
+/*************************************/
 function setupDSInfo(info) {
-    if (info["doc"] == undefined) {
+    if (info["doc"] === undefined) {
         document.getElementById("menu-doc").disabled = true;
     }
     if (info["cohorts"] && info["cohorts"].length > 0) {
@@ -148,7 +201,7 @@ function setupDSInfo(info) {
             sCohortViewModes[sCohortList[idx]] = true;
         }
     }
-    sUnitClassesH.setup(info["unit-classes"]);
+    sEvalCtrlH.setup(info["unit-classes"]);
 }
 
 /*************************************/
@@ -173,6 +226,10 @@ function goToPage(page_mode, ds_name) {
     }
     if (page_mode == "DTREE") {
         window.open("dtree?ds=" + ds_name, sCommonTitle + ":" + ds_name + ":DTREE");
+        return;
+    }
+    if (page_mode == "GENES") {
+        window.open("genes?ds=" + ds_name, sCommonTitle + ":" + ds_name + ":GENES");
         return;
     }
     if (page_mode == "DOC") {
@@ -295,7 +352,7 @@ function setupDSControls() {
     sOpEnumH.init();
     sCreateWsH.init();
     sSubVRecH.init();
-    sUnitClassesH.init();
+    sEvalCtrlH.init();
     ajaxCall("dsinfo", "ds=" + sDSName, setupDSInfo);
 }
 

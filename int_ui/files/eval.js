@@ -205,10 +205,11 @@ var sOpNumH = {
             }
             h_content.push('<span class="hist-diap">' + val + '</span>'); 
             var factor = 30. / Math.max(...h_info[3]);
+            var cell_class = (h_info[0] == "LOG")? "hist-cell-log": "hist-cell";
             for (var j = 0; j < h_info[3].length; j++) {
                 hh = h_info[3][j] * factor;
                 h_content.push(
-                    '<span class="hist-cell" style="height:' + 
+                    '<span class="' + cell_class + '" style="height:' + 
                         hh + 'px;"> </span>');
             }
             if(h_info[0] == "LOG") {
@@ -219,7 +220,8 @@ var sOpNumH = {
             } else {
                 val = "" + h_info[2];
             }
-            h_content.push('<span class="hist-diap">' + val + '</span>'); 
+            var h_repr = JSON.stringify(h_info).replace(/"/g, '&quot;');
+            h_content.push('<span class="hist-diap" title="' + h_repr + ' ">' + val + '</span>'); 
         }
         this.mDivHistogram.innerHTML = h_content.join("");
     }
@@ -234,6 +236,7 @@ var sOpEnumH = {
     mStatusMode: null,
     mUpdateCondStr: null,
     mDivFuncParam: null,
+    mRestrictedMode: null,
     mArrangeBase: null,
     mArrangeDelta: null,
 
@@ -282,13 +285,16 @@ var sOpEnumH = {
         if (unit_stat["kind"] == "func") {
             this.mFuncCtrl = sOpFuncH;
             this.mFuncCtrl.setup(unit_stat);
+            this.mRestrictedMode = null;
         } else {
             this.mFuncCtrl = null;
-            this._setupVariants(unit_stat["variants"]);
+            this._setupVariants(getStatVariants(unit_stat, true), false, 
+                unit_stat["variety-name"] || unit_stat["panel-name"]);
+            this.mRestrictedMode = (unit_stat["rest-count"] !== undefined);
         }
     },
     
-    _setupVariants: function(variants, func_mode) {
+    _setupVariants: function(variants, func_mode, variety_mode) {
         this.mVariants = variants;
         if (this.mVariants == null)
             this.mVariants = [];
@@ -296,6 +302,10 @@ var sOpEnumH = {
         has_zero = false;
         for (j = 0; j < this.mVariants.length; j++) {
             var_name = this.mVariants[j][0];
+            if (var_name == "--") {
+                list_val_rep.push(this.mVariants[j][1]);
+                continue;
+            }
             var_count = this.mVariants[j][1];
             if (unit_stat["detailed"] && var_count > 0)
                 var_count = var_count + '&thinsp;&#x00D7;&thinsp;' + 
@@ -312,6 +322,8 @@ var sOpEnumH = {
         this.careEnumZeros(false);
         if (func_mode && variants.length == 1)
             document.getElementById("elcheck--" + 0).disabled = true;
+        document.getElementById("cur-cond-variety").style.display = 
+            (variety_mode)? "block":"none";            
     },
     
     updateCondition: function(cond) {
@@ -398,7 +410,7 @@ var sOpEnumH = {
             show_zeros = true;
             check_enum_z.checked = show_zeros;
         } else {
-            if (opt == undefined) {
+            if (opt === undefined) {
                 show_zeros = check_enum_z.checked;
             } else {
                 show_zeros = opt;
@@ -412,6 +424,8 @@ var sOpEnumH = {
         var sel_names = [];
         if (this.mVariants != null) {
             for (j=0; j < this.mVariants.length; j++) {
+                if (this.mVariants[j][0] == "--")
+                    continue;
                 if (document.getElementById("elcheck--" + j).checked) {
                     sel_names.push(this.mVariants[j][0]);
                 }
@@ -425,7 +439,7 @@ var sOpEnumH = {
             return;
         this.careControls();
         var err_msg = null;
-        if (opt != undefined && this.mOperationMode != null) {
+        if (opt !== undefined && this.mOperationMode != null) {
             if (this.mOperationMode == opt)
                 this.mOperationMode = 0;
             else
@@ -446,7 +460,7 @@ var sOpEnumH = {
             else
                 err_msg = sel_names.length + " items selected";
         } else
-            err_msg = " Out of choice"
+            err_msg = (this.mRestrictedMode)? "No choice in trace": " Out of choice"
         if (this.mUpdateCondStr && !err_msg && condition_data &&
                 JSON.stringify(condition_data) == this.mUpdateCondStr) {
             err_msg = " ";
@@ -477,104 +491,8 @@ var sOpEnumH = {
 
 /*************************************/
 /*************************************/
-function fillStatList(items, unit_map, list_stat_rep, 
-        unit_names_to_load, expand_mode, click_func) {
-    var group_title = false;
-    var group_seq = []
-    for (idx = 0; idx < items.length; idx++) {
-        unit_stat = items[idx];
-        unit_name   = unit_stat["name"];
-        unit_map[unit_name] = idx;
-        if (group_title != unit_stat["vgroup"] || unit_stat["vgroup"] == null) {
-            if (group_title != false) {
-                list_stat_rep.push('</div>');
-            }
-            group_title = unit_stat["vgroup"];
-            list_stat_rep.push('<div class="stat-group" id="stat-vgroup--' + 
-                    group_seq.length + '">');
-            group_seq.push(idx);
-            if (group_title != null) {
-                list_stat_rep.push('<div class="stat-group-title">' + 
-                    group_title);
-                if (unit_name == "Rules") {
-                    list_stat_rep.push(
-                        '<span id="flt-go-dtree" ' +
-                            'title="Configure decision trees as rules..." ' +
-                        'onclick="goToPage(\'DTREE\');"">&#x2699;</span>')
-                }
-                list_stat_rep.push('</div>');
-            }
-        }
-        func_decor = (unit_stat["kind"] == "func" || 
-            unit_stat["sub-kind"] == "func")? "(...)":"";
-        click_support = '';
-        if (click_func)
-            click_support = '<span class="unit-click" onclick="' +
-                click_func + '(\'' + unit_name + '\')">&#x25c0;</span>&nbsp;';
-        list_stat_rep.push('<div id="stat--' + 
-            unit_name + '" class="stat-unit" ');
-        if (unit_stat["tooltip"]) 
-            list_stat_rep.push('title="' + 
-                escapeText(unit_stat["tooltip"]) + '" ');
-
-        list_stat_rep.push(
-            'onclick="sUnitsH.selectUnit(\'' + unit_name + '\');">');
-        list_stat_rep.push('<div class="wide"><span class="stat-unit-name">' +
-            click_support + unit_name + func_decor + '</span>');
-        if (unit_stat["title"]) 
-            list_stat_rep.push('<span class="stat-unit-title">' + 
-                unit_stat["title"] + '</span>');
-        list_stat_rep.push('</div>')
-        list_stat_rep.push('<div id="stat-data--' + 
-            unit_name + '" class="stat-unit-data">');
-        if (unit_stat["incomplete"]) {
-            unit_names_to_load.push(unit_name);
-            list_stat_rep.push('<div class="comment">Loading data...</div>');
-        } else {
-            switch (unit_stat["kind"]) {
-                case "numeric":
-                    fillStatRepNum(unit_stat, list_stat_rep);
-                    break;
-                case "enum":
-                    fillStatRepEnum(unit_stat, list_stat_rep, expand_mode);
-                    break;
-                case "func":
-                    break;
-            }
-        }
-        list_stat_rep.push('</div></div>')
-    }
-    if (group_title != false) {
-        list_stat_rep.push('</div>')
-    }
-    sUnitClassesH.setVGroups(group_seq);
-}
-
-function refillUnitStat(unit_stat, expand_mode) {
-    div_el = document.getElementById("stat-data--" + unit_stat["name"]);
-    list_stat_rep = [];
-    if (unit_stat["kind"] == "func") 
-        sOpFuncH.setup(unit_stat, list_stat_rep);
-    else {
-        if (unit_stat["kind"] == "numeric") 
-            fillStatRepNum(unit_stat, list_stat_rep);
-        else
-            fillStatRepEnum(unit_stat, list_stat_rep, expand_mode);
-    }
-    div_el.innerHTML = list_stat_rep.join('\n');
-    div_el.className = "";
-}
-
-function renderEnumUnitStat(unit_stat, expand_mode) {
-    list_stat_rep = [];
-    fillStatRepEnum(unit_stat, list_stat_rep, expand_mode);
-    div_el = document.getElementById("stat-data--" + unit_stat["name"]);
-    div_el.innerHTML = list_stat_rep.join('\n');
-}
-
-function topUnitStat(unit_name) {
-    return document.getElementById(
-        "stat--" + unit_name).getBoundingClientRect().top;
+function renderEnumStat(unit_name, expand_mode) {
+    sEvalCtrlH.renderEnumStat(unit_name, expand_mode);
 }
 
 /*************************************/
@@ -592,13 +510,61 @@ function fillStatRepNum(unit_stat, list_stat_rep) {
             list_stat_rep.push('<span class="stat-ok">' + normFloatLongTail(val_min) + 
                 ' &le;&nbsp;...&nbsp;&le; ' + normFloatLongTail(val_max, true) + ' </span>');
         }
-        list_stat_rep.push(': ' + reportStatCount(counts, unit_stat, 0));
+        list_stat_rep.push(': ' + reportStatCount(counts, unit_stat["detailed"], 0));
     }
 }
 
 /*************************************/
+function getStatVariants(unit_stat, decor_mode) {
+    if (decor_mode && unit_stat["split-info"] !== undefined) {
+        var in_variants = unit_stat["variants"];
+        var variants = [];
+        var idx = 0;
+        var split_idx, j;
+        for (split_idx=0; 
+                split_idx < unit_stat["split-info"].length; split_idx++) {
+            block_case = unit_stat["split-info"][split_idx][0];
+            block_size = unit_stat["split-info"][split_idx][1];
+            if (block_case == "active") {
+                variants.push(["--", '<div class="enum-stat-note">active (' +
+                    block_size +  '):</div>']); 
+            } else {
+                if (block_case == "used") {
+                    variants.push(["--", 
+                        '<div class="enum-stat-note">used in criteria (' +
+                        block_size + '):</div>']); 
+                } else {
+                    if (block_case == "rest") {
+                        variants.push(["--", 
+                            '<div class="enum-stat-note">and more ' +
+                            block_size + ':</div>']); 
+                    } else {
+                        console.log("Bad block case:" + block_case);
+                    }
+                }
+            }
+            for (j = 0; j < block_size; j++)
+                variants.push(in_variants[idx++]);
+        }
+        if (unit_stat["rest-count"] !== undefined)
+            variants.push(["--", '<div class="enum-stat-note">hidden:' + 
+                unit_stat["rest-count"] + '</div>']);
+        return variants;
+    }
+    
+    if (unit_stat["variety-name"]) {
+        if (unit_stat["variety-stat"])
+            return unit_stat["variety-stat"]["panels"];
+        return null;
+    } 
+    return unit_stat["variants"];
+}
+
+/*************************************/
 function fillStatRepEnum(unit_stat, list_stat_rep, expand_mode) {
-    var_list = unit_stat["variants"];
+    var_list = getStatVariants(unit_stat, false);
+    cnt_detailed = unit_stat["detailed"];
+    
     list_count = 0;
     if (var_list) {
         for (j = 0; j < var_list.length; j++) {
@@ -607,7 +573,11 @@ function fillStatRepEnum(unit_stat, list_stat_rep, expand_mode) {
         }
     }
     if (list_count == 0) {
-        list_stat_rep.push('<span class="stat-bad">Out of choice</span>');
+        if (unit_stat["rest-count"] !== undefined)
+            empty_msg = "No choice in trace"
+        else
+            empty_msg = "Out of choice";
+        list_stat_rep.push('<span class="stat-bad">' + empty_msg + '</span>');
         return;
     }
     needs_expand = list_count > 6 && expand_mode;
@@ -617,7 +587,7 @@ function fillStatRepEnum(unit_stat, list_stat_rep, expand_mode) {
         view_count = (list_count > 6)? 3: list_count; 
         
     if (list_count > 6 && expand_mode) {
-        list_stat_rep.push('<div onclick="renderEnum(\'' + 
+        list_stat_rep.push('<div onclick="renderEnumStat(\'' + 
             unit_stat["name"] +  '\',' + (3 - expand_mode) + 
             ');" class="enum-exp">' + 
             ((expand_mode==1)?'+':'-') + '</div>');
@@ -631,17 +601,21 @@ function fillStatRepEnum(unit_stat, list_stat_rep, expand_mode) {
         view_count -= 1;
         list_count--;
         list_stat_rep.push('<li><b>' + var_name + '</b>: ' + 
-            reportStatCount(var_list[j], unit_stat, 1) + '</li>');
+            reportStatCount(var_list[j], cnt_detailed, 1) + '</li>');
     }
     list_stat_rep.push('</ul>');
-    if (list_count > 0) {
-        list_stat_rep.push('<p class="stat-comment">...and ' + 
-            list_count + ' variants more...</p>');
+    if (list_count > 0 || unit_stat["rest-count"] !== undefined) {
+        list_stat_rep.push('<div class="stat-comment">');
+        if (list_count > 0)
+            list_stat_rep.push('...and ' + list_count + ' variants more');
+        if (unit_stat["rest-count"] !== undefined)
+            list_stat_rep.push('(' + unit_stat["rest-count"] + ' hidden)');
+        list_stat_rep.push('</div>');
     }
 }
 
-function reportStatCount(count_info, unit_stat, shift) {
-    if (unit_stat["detailed"] && count_info[1 + shift] > 0) {
+function reportStatCount(count_info, detailed, shift) {
+    if (detailed && count_info[1 + shift] > 0) {
         cnt = count_info[1 + shift];
         s_mult = (cnt > 1)? "s":"";
         return '<span class="stat-count">' + cnt + 
@@ -826,40 +800,91 @@ function startWsCreate() {
     sCreateWsH.startIt();
 }
 
-/*************************************/
-/* Unit classes for show/hide        */
-/*************************************/
-var sUnitClassesH = {
-    mUnitClasses: null,
-    mUnitItems: null,
+/**********************************************/
+/* Visual control for units and visual groups */
+/**********************************************/
+var sEvalCtrlH = {
+    mUShowClasses: null,
     mVGroupsSeq: null,
     mDivTopBack: null,
     mDivMain: null,
+    mDivList: null,
+    mSelFunc: null,
     mSpanState: null,
     mSpanIntState: null,
     mBtnReset: null,
     mBtnDone: null,
-    mCurCriterium: null,
+    mCurUShowState: null,
+    mTimeH: null,
+    mWaiting: false,
+    mRqId: null,
+    mPostAction: null,
+    mUnitsDelay: null,
+    mItems: null,
+    mFunctions: null,
+    mFunctionNames: null,
+    mUnitMap: null,
+    mCurUnit: null,
+    mCurFuncName: null,
+    mTotalCounts: null,
+    mFilteredCounts: null,
     
     init: function() {
         this.mDivTopBack = document.getElementById("unit-classes-back");
         this.mDivMain = document.getElementById("unit-classes-main");
+        this.mDivList = document.getElementById("stat-list");
+        this.mSelFunc = document.getElementById("function-name-select");
         this.mSpanState = document.getElementById("unit-classes-state");
         this.mSpanIntState = document.getElementById("unit-classes-int-state");
         this.mBtnReset = document.getElementById("unit-classes-reset");
         this.mBtnDone = document.getElementById("unit-classes-done");
     },
+
+    waitForSetup: function() {
+        this.mRqId = false;
+        if (this.mTimeH != null) {
+            clearInterval(this.mTimeH);
+            this.mTimeH = null;
+        }
+        this.mDivList.className = "wait";
+        this.mSelFunc.className = "wait";
+        this.mWaiting = true;
+    },
+
+    waitForLoad: function() {
+        clearInterval(this.mTimeH);
+        this.mTimeH = null;
+        if (this.mWaiting || this.mUnitsDelay.length == 0)
+            return;
+        this.mWaiting = true;
+        this.sortVisibleDelays();
+    },
+   
+    _startSetup: function(info, smp_ctrl, expand_mode, click_func) {
+        this.mWaiting = false;
+        this.mRqId  = info["rq-id"];
+        this.mDivList.className = "";
+        this.mSelFunc.className = "";
+        this.mFilteredCounts = info["filtered-counts"];
+        this.mTotalCounts = info["total-counts"];
+        this.renderCounts();
+        if (smp_ctrl)
+            smp_ctrl.reset(this.mFilteredCounts[0]);
+        
+        this.setupItems(info["stat-list"], info["functions"], 
+            expand_mode, click_func);
+    },
     
-    setup: function(unit_classes) {
-        this.mUnitClasses = unit_classes;
+    setup: function(show_classes) {
+        this.mUShowClasses = show_classes;
         var list_rep = [];
         var j, k;
-        for (j = 0; j < this.mUnitClasses.length; j++) {
-            unit_cls = this.mUnitClasses[j];
+        for (j = 0; j < this.mUShowClasses.length; j++) {
+            unit_cls = this.mUShowClasses[j];
             list_rep.push('<div class="unit-classes-class">\n' +
                 '  <div class="unit-class-title">' + 
                 '<input id="ucl--' + j + '-all" type="checkbox" checked ' +
-                'onclick="sUnitClassesH.update();">&nbsp;' + 
+                'onclick="sEvalCtrlH.update();">&nbsp;' + 
                 unit_cls["title"] + '</div>');
             list_rep.push('<div class="unit-class-group" id="ucl-group--' + j + '">');
             for(k=0; k < unit_cls["values"].length; k++) {
@@ -867,69 +892,150 @@ var sUnitClassesH = {
                 list_rep.push(
                     '    <div class="unit-class-val" id="div-ucl' + it_code + '">' +
                     '<input id="ucl' + it_code + '" type="checkbox" checked ' +
-                    'onclick="sUnitClassesH.update();">&nbsp;' + 
+                    'onclick="sEvalCtrlH.update();">&nbsp;' + 
                     unit_cls["values"][k] + '</div>');
             }
             list_rep.push('</div></div>');
         }
         this.mDivMain.innerHTML = list_rep.join("\n");
-        this.showStatus();
-        if (this.mUnitItems != null) {
-            this.updateItems(this.mUnitItems);
+        if (this.mItems != null) {
+            this.updateItems();
         }
     },
 
-    itInWork: function(it_classes, except_cls) {
+    getCurUnitName: function() {
+        return this.mCurUnit;
+    },
+    
+    getCurUnitStat: function() {
+        if (this.mCurUnit == null)
+            return null;
+        return this.mUnitMap[this.mCurUnit];
+    },
+
+    getCurUnitTitle: function() {
+        if (this.mCurUnit == null)
+            return "?";
+        if (this.mUnitMap[this.mCurUnit]["kind"] == "func")
+            return this.mCurUnit + "()";
+        return this.mCurUnit;
+    },
+    
+    getUnitStat: function(unit_name) {
+        this.checkUnitDelay(unit_name);
+        return this.mUnitMap[unit_name];
+    },
+    
+    chooseCurName: function(unit_name) {
+        if (unit_name && this.mUnitMap[unit_name] != undefined)
+            return unit_name;
+        return this.mItems[0]["name"];
+    },
+    
+    argRqId: function() {
+        return "&rq_id=" + encodeURIComponent(this.mRqId);
+    },
+
+    argDelays: function() {
+        return "&units=" + encodeURIComponent(JSON.stringify(this.mUnitsDelay));
+    },
+    
+    getCurCount: function() {
+        return this.mFilteredCounts[0];
+    },
+    
+    getTotalCount: function() {
+        return this.mTotalCounts[0];
+    },
+    
+    checkRqId: function(info) {
+        if (info["rq-id"] != this.mRqId) 
+            return false;
+        return true;
+    },
+    
+    checkDelayed: function() {
+        var post_action = this.mPostAction;
+        this.mPostAction = null;
+        if (post_action)
+            eval(post_action);
+        if (this.mWaiting || this.mTimeH != null || this.mUnitsDelay.length == 0)
+            return;
+        this.mTimeH = setInterval(function(){sUnitsH.loadUnits();}, 50);
+    },
+    
+    postAction: function(action, no_wait) {
+        if (!no_wait || this.mWaiting) {
+            if (this.mPostAction) 
+                this.mPostAction += "\n" + action;
+            else
+                this.mPostAction = action;
+            return true;
+        }
+        return false;
+    },
+    
+    renderCounts: function() {
+        var el_rep = document.getElementById("list-report");
+        if (!el_rep) 
+            return;
+        if (this.mFilteredCounts[0] != this.mTotalCounts[0])
+            el_rep.innerHTML = 
+                this.mFilteredCounts[0] + "/" + this.mTotalCounts[0];
+        else
+            el_rep.innerHTML = this.mFilteredCounts[0] + "";
+    },
+    
+    checkFunctionSelect: function() {
+        var func_unit_name = this.mSelFunc.value;
+        if (func_unit_name == this.mCurUnit)
+            return;
+        if (func_unit_name == "") {
+            this.setCurUnit(this.mCurUnit);
+            return;
+        }
+        sUnitsH.selectUnit(func_unit_name, "func");
+    },
+    
+    isFuncUnit: function(unit_name) {
+        return this.mFunctionNames.indexOf(unit_name) >= 0;
+    },
+    
+    isUShown: function(it_classes, except_index) {
         var j, k, in_w;
-        if (this.mCurCriterium != null) {
-            for (var j=0; j < this.mCurCriterium.length; j++) {
-                if ((this.mCurCriterium[j] != null) 
-                        && (j != except_cls)) {
-                    in_w = false;
-                    for (var k=0; k < it_classes[j].length; k++) {
-                        if(this.mCurCriterium[j].
-                            indexOf(it_classes[j][k]) >= 0) {
-                            in_w = true;
-                            break;
-                        }
-                    }
-                    if (!in_w) {
+        if (this.mCurUShowState != null) {
+            for (var j=0; j < this.mCurUShowState.length; j++) {
+                if ((this.mCurUShowState[j] != null) 
+                        && (j != except_index)) {
+                    if(this.mCurUShowState[j].indexOf(it_classes[j]) < 0)
                         return false;
-                    }
                 }
             }
         }
         return true;        
     },
     
-    setVGroups: function(group_seq) {
-        this.mVGroupsSeq = group_seq;
-    },
-    
-    updateItems: function(unit_items, no_reset) {
-        this.mUnitItems = unit_items;
-        if (this.mUnitClasses == null) {
+    updateItems: function(no_reset) {
+        if (this.mUShowClasses == null) {
             return;
         }
         var cls_counts = [];
         var j, idx, k;
-        for (j = 0; j < this.mUnitClasses.length; j++) {
-            cls_counts.push(Array(this.mUnitClasses[j]["values"].length).fill(0));
+        for (j = 0; j < this.mUShowClasses.length; j++) {
+            cls_counts.push(Array(this.mUShowClasses[j]["values"].length).fill(0));
         }
-        for (idx=0; idx < this.mUnitItems.length; idx++) {
-            it_classes = this.mUnitItems[idx]["classes"];
-            for (j=0; j < this.mUnitClasses.length; j++) {
-                if (!this.itInWork(it_classes, j))
+        for (idx=0; idx < this.mItems.length; idx++) {
+            it_classes = this.mItems[idx]["classes"];
+            for (j=0; j < this.mUShowClasses.length; j++) {
+                if (!this.isUShown(it_classes, j))
                     continue;
-                facet_idxs = it_classes[j];
-                for (k=0; k < facet_idxs.length; k++) {
-                    cls_counts[j][facet_idxs[k]]++;
-                }
+                facet_idx = it_classes[j];
+                cls_counts[j][facet_idx]++;
             }
         }
-        for (j = 0; j < this.mUnitClasses.length; j++) {
+        for (j = 0; j < this.mUShowClasses.length; j++) {
             cls_total = cls_counts[j].reduce(function(acc, val) { return acc + val; }, 0)
-            for (k=0; k < this.mUnitClasses[j]["values"].length; k++) {
+            for (k=0; k < this.mUShowClasses[j]["values"].length; k++) {
                 it_code = '--' + j + '-' + k;
                 it_div = document.getElementById('div-ucl' + it_code);
                 it_check = document.getElementById('ucl' + it_code);
@@ -947,49 +1053,63 @@ var sUnitClassesH = {
     },
     
     update: function(no_reset) {
-        this.mCurCriterium = [];
+        this.mCurUShowState = [];
         var j, k, idx;
-        for (j = 0; j < this.mUnitClasses.length; j++) {
+        for (j = 0; j < this.mUShowClasses.length; j++) {
             cls_div = document.getElementById("ucl-group--" + j);
             cls_check = document.getElementById("ucl--" + j + "-all");
             cls_div.style.display = (cls_check.checked)? "none":"block";
             var j_cr = null;
             if (!cls_check.checked) {
                 j_cr = [];
-                for(k=0; k < this.mUnitClasses[j]["values"].length; k++) {
+                for(k=0; k < this.mUShowClasses[j]["values"].length; k++) {
                     it_code = '--' + j + '-' + k;
                     if (document.getElementById("ucl" + it_code).checked)
                         j_cr.push(k);
                 }
             }
-            this.mCurCriterium.push(j_cr);
+            this.mCurUShowState.push(j_cr);
         }
+        var cnt_shown = this.updateUShow();
+        if (cnt_shown == 0 && this.mItems.length > 0 && !no_reset) {
+            this.reset(true);
+            return;
+        }
+        this.showStatus(cnt_shown, this.mItems.length);
+    },
+    
+    updateUShow: function() {
         var cnt_shown = 0;
         var groups_shown = [];
-        for (idx=0; idx < this.mUnitItems.length; idx++) {
-            it = this.mUnitItems[idx];
-            var in_w = this.itInWork(it["classes"]);
+        var group_e_val = -1;
+        for (idx = 0; idx < this.mItems.length; idx++) {
+            it = this.mItems[idx];
+            var ushown = this.isUShown(it["classes"]);
+            this.unitDiv(it["name"]).style.display = 
+                (ushown)? "block": "none";
             if (groups_shown.length < this.mVGroupsSeq.length &&
                     idx == this.mVGroupsSeq[groups_shown.length]) {
+                if (groups_shown.length > 0)
+                    this.renderVGroupEntropy(groups_shown.length - 1, group_e_val);
                 groups_shown.push(false);
+                group_e_val = -1;
             }
-            if (in_w) {
+            if (ushown) {
                 cnt_shown++;
                 groups_shown[groups_shown.length - 1] = true;
             }
-            document.getElementById("stat--" + it["name"]).style.display = 
-                (in_w)? "block": "none";
+            e_val = this.renderEntopyReport(idx);
+            if (ushown && e_val > group_e_val)
+                group_e_val = e_val;
         }
+        if (groups_shown.length > 0)
+            this.renderVGroupEntropy(groups_shown.length - 1, group_e_val);
         for(idx=0; idx < groups_shown.length; idx++) {
             grp_el = document.getElementById("stat-vgroup--" + idx);
             if (grp_el)
                 grp_el.style.display = (groups_shown[idx])? "block": "none";
         }
-        if (cnt_shown == 0 && this.mUnitItems.length > 0 && !no_reset) {
-            this.reset(true);
-            return;
-        }
-        this.showStatus(cnt_shown, this.mUnitItems.length);
+        return cnt_shown;
     },
     
     showStatus: function(cnt_shown, cnt_all) {
@@ -1012,10 +1132,10 @@ var sUnitClassesH = {
     
     reset: function(heavy_mode) {
         var j;
-        for (j = 0; j < this.mUnitClasses.length; j++) {
+        for (j = 0; j < this.mUShowClasses.length; j++) {
             document.getElementById("ucl--" + j + "-all").checked = true;
             if (heavy_mode) {
-                for(k=0; k < this.mUnitClasses[j]["values"].length; k++) {
+                for(k=0; k < this.mUShowClasses[j]["values"].length; k++) {
                     it_code = '--' + j + '-' + k;
                     document.getElementById("ucl" + it_code).checked = true;
                 }
@@ -1023,11 +1143,322 @@ var sUnitClassesH = {
         }
         this.update();
         if (heavy_mode) {
-            this.updateItems(this.mUnitItems, true);
+            this.updateItems(true);
         } else {
             this.hide();
         }
+    },
+    
+    setupItems: function(stat_list, func_list, expand_mode, click_func) {
+        this.mItems = [];
+        this.mUnitMap = {}
+        this.mUnitsDelay = [];
+        var idx;
+        for (idx = 0; idx < stat_list.length; idx++) {
+            unit_stat = stat_list[idx];
+            if (unit_stat["kind"] == "func")
+                continue;
+            this.mUnitMap[unit_stat["name"]] = unit_stat;
+            this.mItems.push(unit_stat);
+        }
+        this.mFunctions = [];
+        this.mFunctionNames = [];
+        for (idx = 0; idx < func_list.length; idx++) {
+            unit_stat = func_list[idx];
+            if (sOpFuncH.notSupported(unit_stat))
+                continue;
+            this.mUnitMap[unit_stat["name"]] = unit_stat;
+            this.mFunctions.push(unit_stat);
+            this.mFunctionNames.push(unit_stat["name"]);
+        }
+        
+        resetSelectInput(this.mSelFunc, this.mFunctionNames, true, "");
+        
+        for (idx = 0; idx < this.mItems.length; idx++) {
+            unit_stat = this.mItems[idx];
+            if (unit_stat["panel-name"]) {
+                this.mUnitMap[unit_stat["panel-name"]]["variety-stat"] = unit_stat;
+            }
+        }
+        var list_stat_rep = [];
+        var group_title = false;
+        this.mVGroupsSeq = [];
+        for (idx = 0; idx < this.mItems.length; idx++) {
+            unit_stat = this.mItems[idx];
+            unit_name   = unit_stat["name"];
+            if (group_title != unit_stat["vgroup"] || unit_stat["vgroup"] == null) {
+                if (group_title != false) {
+                    list_stat_rep.push('</div>');
+                }
+                group_title = unit_stat["vgroup"];
+                list_stat_rep.push('<div class="stat-group" id="stat-vgroup--' + 
+                        this.mVGroupsSeq.length + '">');
+                list_stat_rep.push('<div class="stat-group-title">' + 
+                    ((group_title != null)? group_title:"") + 
+                    '<span class="entropy-info" id="vgroup-entropy--' + 
+                    this.mVGroupsSeq.length + '"></span>');
+                this.mVGroupsSeq.push(idx);
+                if (unit_name == "Rules") {
+                    list_stat_rep.push(
+                        '<span id="flt-go-dtree" ' +
+                            'title="Configure decision trees as rules..." ' +
+                        'onclick="goToPage(\'DTREE\');"">&#x2699;</span>')
+                }
+                list_stat_rep.push('</div>');
+            }
+            name_decor = (unit_stat["kind"] == "func" || 
+                unit_stat["sub-kind"] == "func")? "(...)":"";
+            click_support = '';
+            if (click_func)
+                click_support = '<span class="unit-click" onclick="' +
+                    click_func + '(\'' + unit_name + '\')">&#x25c0;</span>&nbsp;';
+            list_stat_rep.push('<div id="stat--' + 
+                unit_name + '" class="stat-unit" ');
+            if (unit_stat["tooltip"]) 
+                list_stat_rep.push('title="' + 
+                    escapeText(unit_stat["tooltip"]) + '" ');
+
+            list_stat_rep.push(
+                'onclick="sUnitsH.selectUnit(\'' + unit_name + '\');">');
+            list_stat_rep.push('<div class="wide">' +
+                '<span class="stat-unit-name">' +
+                click_support + unit_name + name_decor + '</span>' +
+                '<span class="entropy-info" id="unit-entropy--' + idx + '"></span>');
+            if (unit_stat["title"]) 
+                list_stat_rep.push('<span class="stat-unit-title">' + 
+                    unit_stat["title"] + '</span>');
+            list_stat_rep.push('</div>')
+            list_stat_rep.push('<div id="stat-data--' + 
+                unit_name + '" class="stat-unit-data">');
+            if (unit_stat["incomplete"]) {
+                this.mUnitsDelay.push(unit_name);
+                list_stat_rep.push('<div class="comment">Loading data...</div>');
+            } else {
+                switch (unit_stat["kind"]) {
+                    case "numeric":
+                        fillStatRepNum(unit_stat, list_stat_rep);
+                        break;
+                    case "enum":
+                        fillStatRepEnum(unit_stat, list_stat_rep, expand_mode);
+                        break;
+                    case "func":
+                        break;
+                }
+            }
+            list_stat_rep.push('</div></div>')
+        }
+        if (group_title != false) {
+            list_stat_rep.push('</div>')
+        }
+        this.mDivList.innerHTML = list_stat_rep.join('\n');
+        this.updateItems();
+    },
+    
+    renderEnumStat: function(unit_name, expand_mode) {
+        unit_stat = this.getUnitStat(unit_name);
+        list_stat_rep = [];
+        fillStatRepEnum(unit_stat, list_stat_rep, expand_mode);
+        div_el = document.getElementById("stat-data--" + unit_stat["name"]);
+        div_el.innerHTML = list_stat_rep.join('\n');
+    },
+    
+    resetupUnitStat: function(unit_stat, expand_mode) {
+        prev_unit_stat = this.mUnitMap[unit_stat["name"]];
+        this.mUnitMap[unit_stat["name"]] = unit_stat;
+        this.mItems[this.mItems.indexOf(prev_unit_stat)] = unit_stat;
+        
+        div_el = document.getElementById("stat-data--" + unit_stat["name"]);
+        list_stat_rep = [];
+        if (unit_stat["kind"] == "func") 
+            sOpFuncH.setup(unit_stat, list_stat_rep);
+        else {
+            if (unit_stat["kind"] == "numeric") 
+                fillStatRepNum(unit_stat, list_stat_rep);
+            else
+                fillStatRepEnum(unit_stat, list_stat_rep, expand_mode);
+        }
+        div_el.innerHTML = list_stat_rep.join('\n');
+        div_el.className = "";
+    },
+    
+    renderEntopyReport: function(unit_idx) {
+        var unit_stat = this.mItems[unit_idx];
+        var e_rep = this.unitEntropyReport(unit_stat);
+        e_el = document.getElementById("unit-entropy--" + unit_idx);
+        e_el.innerHTML = '['+ e_rep[0].toFixed(3) + ']';
+        e_el.title = e_rep[1];
+        return e_rep[0];
+    },
+    
+    renderVGroupEntropy: function(group_idx, e_val) {
+        e_el = document.getElementById("vgroup-entropy--" + group_idx);
+        e_el.innerHTML = '['+ e_val.toFixed(3) + ']';
+    },
+    
+    unitEntropyReport: function(unit_stat) {
+        if (unit_stat == null || unit_stat["incomplete"])
+            return [-1, "loading"];
+        var total = this.mFilteredCounts[(unit_stat["detailed"])?1:0];
+        var var_counts = [];
+        if (unit_stat["kind"] == "numeric") {
+            if (unit_stat["histogram"]) {
+                hist_seq = unit_stat["histogram"][3];
+                for (var j = 0; j < hist_seq.length; j++) {
+                    var_counts.push(hist_seq[j]);
+                    total -= hist_seq[j];
+                }
+            }
+        } else if (unit_stat["kind"] == "enum") {
+            var c_idx = (unit_stat["detailed"]? 2:1);
+            var variants = getStatVariants(unit_stat, false);
+            if (variants) {
+                for (var j = 0; j < variants.length; j++) {
+                    if (variants[j][0] == "--")
+                        continue;
+                    cnt = variants[j][c_idx];
+                    var_counts.push(cnt);
+                    total -= cnt;
+                }
+            }
+            // No special work for multiset
+            if (total > 0)
+                var_counts.push(total);
+        }
+        
+        return entropyReport(var_counts);
+    },
+    
+    unitDiv: function(unit_name) {
+        return document.getElementById("stat--" + unit_name);
+    },
+
+    curUnitDiv: function() {
+        if (this.mCurUnit && this.mFunctionNames.indexOf(this.mCurUnit) < 0)
+            return this.unitDiv(this.mCurUnit);
+        return null;
+    },
+    
+    setCurUnit: function(unit_name) {
+        this.mCurUnit = unit_name;
+        this.mSelFunc.selectedIndex = this.mFunctionNames.indexOf(this.mCurUnit) + 1;
+    },
+    
+    sortVisibleDelays: function() {
+        var view_height = this.mDivList.getBoundingClientRect().height;
+        view_seq = [];
+        hidden_seq = [];
+        for (var idx=0; idx < this.mUnitsDelay.length; idx++) {
+            var rect = this.unitDiv(this.mUnitsDelay[idx]).getBoundingClientRect();
+            if ((rect.top + rect.height < 0) || (rect.top > view_height))
+                hidden_seq.push(this.mUnitsDelay[idx]);
+            else
+                view_seq.push(this.mUnitsDelay[idx]);
+        }
+        this.mUnitsDelay = view_seq.concat(hidden_seq);
+    },
+    
+    checkUnitDelay: function(unit_name) {
+        var pos = this.mUnitsDelay.indexOf(unit_name);
+        if (pos >= 0) {
+            this.mUnitsDelay.splice(pos, 1);
+            this.mUnitsDelay.splice(0, 0, unit_name);
+        }
+        if (pos >= 0) 
+            this.checkDelayed();
+    },
+    
+    dropUnitDelay: function(unit_name) {
+        var pos = this.mUnitsDelay.indexOf(unit_name);
+        if (pos >= 0) 
+            this.mUnitsDelay.splice(pos, 1);
+    },
+    
+    loadUnits: function(info, expand_mode, cond_h) {
+        if (!sUnitsH.infoIsUpToDate(info))
+            return;
+        this.mWaiting = false;
+        var cur_el = this.curUnitDiv();
+        if (cur_el)
+            var prev_top = cur_el.getBoundingClientRect().top;
+        
+        for (var idx = 0; idx < info["units"].length; idx++) {
+            unit_stat = info["units"][idx];
+            unit_name = unit_stat["name"];
+            this.dropUnitDelay(unit_name);
+            if (unit_stat["variety-name"]) 
+                unit_stat["variety-stat"] = this.mUnitMap[unit_name]["variety-stat"];
+            this.resetupUnitStat(unit_stat, expand_mode);
+            if (this.mCurUnit == unit_name)
+                sUnitsH.selectUnit(unit_name, true);
+            if (unit_stat["panel-name"]) {
+                panel_stat = this.mUnitMap[unit_stat["panel-name"]];
+                panel_stat["variety-stat"] = unit_stat;
+                this.resetupUnitStat(panel_stat, expand_mode);
+                if (this.mCurUnit == unit_stat["panel-name"])
+                    sUnitsH.selectUnit(unit_stat["panel-name"], true);
+            }
+            if (cur_el) {
+                cur_top = cur_el.getBoundingClientRect().top;
+                this.mDivList.scrollTop += cur_top - prev_top;
+            }
+            if (cond_h)
+                cond_h.checkDelay(unit_name);
+        }
+        this.update();
+        this.checkDelayed();
     }
+    
 };
 
 /*************************************/
+function reduceTotal(total) {
+    if (total < 10)
+        // for N < 10; easy to select
+        return 0.3 + 0.02 * (total);
+    if (total < 25)
+        // for N < 25; still possible to view all values together on one page
+        return 0.5 + (total - 10) / 15;
+    if (total < 125)
+        // for N < 125; easy to scroll
+        return 2 + Math.sqrt(total - 25) / 5;
+    if (total < 625)
+        // for N < 625; still possible to scroll
+        return 4 + (total - 125) / 100;
+    if (total < 3125)
+        // for N < 3125; difficult to scroll, exact N no longer matters
+        return 9 + (total - 625) / 200;
+    // for N >= 3125; visual selection 
+    return 21.5;
+}
+
+/*************************************/
+function entropyReport(counts) {
+    var total = 0.;
+    for (j = 0; j < counts.length; j++) {
+        total += counts[j]
+        // alt:
+        // total += Math.sqrt(counts[j]);
+    }
+    if (total < 3) 
+        return [-1, "E=0! T=" + total];
+    var sum_e = 0.;
+    var cnt = 0;
+    for (j = 0; j < counts.length; j++) {
+        if (counts[j] == 0)
+            continue;
+        cnt++;
+        quote = counts[j] /total;
+        sum_e -= quote * Math.log2(quote);
+    }
+    var norm_e = sum_e / Math.log2 (total);
+    var divisor = reduceTotal(cnt);
+    var pp = norm_e / divisor;
+    return [
+        Math.min(1.0, pp),
+        "E=" + norm_e.toFixed(3) +
+        " T=" + total +
+        " C=" + cnt +
+        " D=" + divisor.toFixed(3) +
+        " L=" + counts.length
+    ];
+}

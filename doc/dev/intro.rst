@@ -46,6 +46,17 @@ There are 4 kinds of Front End pages support by the system:
     
 There is also directory pages for the whole :term:`vault` and its portions with fixed :term:`root dataset`, they are provided on Back End level by request :doc:`rest/dirinfo`
 
+Other features
+--------------
+
+.. _gene_db:
+
+The system supports gene symbol database. The data is collected from two souces: HGNC_ and Ensembl_/GTF.
+
+.. _HGNC: https://www.genenames.org/
+
+.. _Ensembl: http://www.ensembl.org/index.html
+
 Architecture: Back End, REST API, Front End
 -------------------------------------------
 

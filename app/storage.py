@@ -34,11 +34,11 @@ from app.model.mongo_db import MongoConnector
 from app.model.dir_entry import DirDSEntry
 from app.model.ds_favor import FavorStorageAgent
 #===============================================
-sID_Pattern = re.compile('^\\S+$', re.U)
+sDSNamePattern = re.compile(r'^\S+$', re.U)
 
 def checkDSName(name, kind):
-    global sID_Pattern
-    if not sID_Pattern.match(name) or not name[0].isalpha():
+    global sDSNamePattern
+    if not sDSNamePattern.match(name) or not name[0].isalpha():
         print("Incorrect dataset name:", name, file = sys.stderr)
         assert False
     if kind == "ws":
@@ -301,7 +301,7 @@ if __name__ == '__main__':
 
     #========================================
     import forome_tools
-    forome_tools.compatible((0, 1, 7))
+    forome_tools.compatible((0, 1, 9))
 
     #========================================
     if sys.version_info < (3, 7):

@@ -85,7 +85,7 @@ function setupTags(info) {
     rep = [];
     for (j = 0; j < op_tags.length; j++) {
         var tag_name = op_tags[j];
-        if (sRecTags[tag_name] == undefined)
+        if (sRecTags[tag_name] === undefined)
             continue
         if (tag_name == "_note") 
             tag_title = "_note...";
@@ -117,16 +117,10 @@ function setupTags(info) {
         if (tag_name == "_note")
             continue;
         if (sTagOrder.indexOf(tag_name) < 0) {
-            var option = document.createElement('option');
-            option.innerHTML = tag_name;
-            option.value = tag_name;
-            sInpTagNameList.append(option)
+            sInpTagNameList.append(_mkOption(tag_name));
         }
     }
-    var option = document.createElement('option');
-    option.innerHTML = "_note";
-    option.value = "_note";
-    sInpTagNameList.append(option);
+    sInpTagNameList.append(_mkOption("_note"));
     sInpTagNameList.selectedIndex = -1;
     document.getElementById("tags-time").innerHTML = (info["upd-time"])?
         ('Updated: <span class="note-time">' + 
@@ -143,7 +137,7 @@ function updateTagsState() {
         tag_name = sTagOrder[sCurTagIdx];
         sInpTagName.value = tag_name;
         tag_val = sRecTags[tag_name];
-        sInpTagValue.value = ((tag_val != undefined)? "" + tag_val:"").trim();
+        sInpTagValue.value = ((tag_val !== undefined)? "" + tag_val:"").trim();
     }
     checkTagInputs();
 }

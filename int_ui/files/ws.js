@@ -260,10 +260,6 @@ function refreshHitTranscripts(val) {
 //=====================================
 // Export
 //=====================================
-function getCurCount() {
-    return sRecList.length;
-}
-
 function doExport() {
     sViewH.popupOff();
     ajaxCall("export", sConditionsH.getCondRqArgs(
@@ -281,18 +277,7 @@ function doCSVExport() {
 // Filters
 //=====================================
 function onFilterListChange() {
-    var all_filters = sFiltersH.getAllList();
-    for (idx = sSelectFltNamed.length - 1; idx > 0; idx--) {
-        sSelectFltNamed.remove(idx);
-    }
-    for (idx = 0; idx < all_filters.length; idx++) {
-        flt_name = all_filters[idx];
-        var option = document.createElement('option');
-        option.innerHTML = flt_name;
-        option.value = flt_name;
-        sSelectFltNamed.append(option)
-    }
-    sSelectFltNamed.selectedIndex = all_filters.indexOf(sCurFilterName) + 1;
+    resetSelectInput(sSelectFltNamed, sFiltersH.getAllList(), true, sCurFilterName);
     sFiltersH.update();
     sViewH.popupOff();
 }
@@ -376,18 +361,7 @@ sTagSupportH = {
 
     _loadSelection: function(info) {
         this.mCurTag = (info["tag"])? info["tag"]: null;
-        for (idx = this.mSelCurTag.length - 1; idx > 0; idx--) {
-            this.mSelCurTag.remove(idx);
-        }
-        tag_list = info["tag-list"];
-        for (idx = 0; idx < tag_list.length; idx++) {
-            tag_name = tag_list[idx];
-            var option = document.createElement('option');
-            option.innerHTML = tag_name;
-            option.value = tag_name;
-            this.mSelCurTag.append(option)
-        }
-        this.mSelCurTag.selectedIndex = tag_list.indexOf(this.mCurTag) + 1;
+        resetSelectInput(this.mSelCurTag, info["tag-list"], true, this.mCurTag);
         this.mTagRecList = (this.mCurTag)? info["tag-rec-list"]:null;
 
         if (this.mTagsState != info["tags-state"]) {
@@ -571,3 +545,37 @@ function checkTabNavigation(tag_name) {
     sTagSupportH.checkNavigation(tag_name);
 }
 
+/*************************************/
+function showArchivation() {
+    relaxView();
+    res_content = 'Archivate dataset?<br>' +
+        '<input id="ws-archive-support" type="checkbox" checked/>with support' +
+        '&emsp;' +
+        '<input id="ws-archive-doc" type="checkbox" checked/>with documentation' +
+        '<br><button class="popup" onclick="doArchivation();">Prepare</button>';
+    res_el = document.getElementById("export-result");
+    res_el.innerHTML = res_content;
+    sViewH.popupOn(res_el);
+}
+
+function doArchivation() {
+    sViewH.popupOff();
+    var args = "ds=" + sDSName+ "&support=" + 
+        ((document.getElementById("ws-archive-support").checked)? "yes":"no") +
+        "&doc=" + 
+        ((document.getElementById("ws-archive-doc").checked)? "yes":"no");
+    ajaxCall("export_ws", args, setupArchivation);
+}
+
+function setupArchivation(info) {
+    res_el = document.getElementById("export-result");
+    if (info["url"]) {
+        res_el.className = "popup";
+        res_el.innerHTML = '<a href="' + info["url"] + 
+            '" target="blank" ' + 'download>Download archive</a>';
+    } else {
+        res_el.className = "popup problems";
+        res_el.innerHTML = 'Bad configuration';
+    }
+    sViewH.popupOn(res_el);
+}

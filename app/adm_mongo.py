@@ -17,7 +17,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-import sys, json, re
+import sys, json, re, traceback
 from argparse import ArgumentParser
 from pymongo import MongoClient
 #=====================================
@@ -25,13 +25,13 @@ parser = ArgumentParser()
 parser.add_argument("-c", "--config", default = "./anfisa.json",
     help = "Anfisa config file")
 parser.add_argument("-a", "--aspects", default = "FDT",
-    help = "Aspects: All/Filter/Dtree/Tags/Info")
+    help = "Aspects: All/Filter/Dtree/Panels/Tags/Info")
 parser.add_argument("--pretty", action = "store_true",
     help = "Pretty JSON print")
 parser.add_argument("--dry", action = "store_true",
     help = "Dry run: just report instead of data change")
 parser.add_argument("-m", "--mode", default = "list",
-    help="Command: list/dump/restore/drop")
+    help="Command: list/dump/restore/drop/GeneDb")
 parser.add_argument("datasets", nargs = "*",
     help = "Dataset names or pattern with '*'")
 run_args = parser.parse_args()
@@ -40,6 +40,7 @@ run_args = parser.parse_args()
 sAspectMap = {
     "I": "dsinfo",
     "F": "filter",
+    "P": "panel.Symbol",
     "D": "dtree",
     "T": "tags"
 }
@@ -86,13 +87,41 @@ def presentation(obj, pretty_mode):
 
 
 #===============================================
-with open(run_args.config, "r", encoding = "utf-8") as inp:
-    cfg = json.loads(inp.read())
+try:
+    with open(run_args.config, "r", encoding = "utf-8") as inp:
+        cfg = json.loads(inp.read())
+except Exception:
+    print("Error in configuration file", run_args.config, file = sys.stderr)
+    traceback.print_exc(file = sys.stderr)
+    assert False
 
+#===============================================
+if run_args.mode == "GeneDb":
+    assert len(run_args.datasets) == 1, "DB file name expected as argument"
+    mongo_db = MongoClient(
+        cfg.get("mongo-host"), cfg.get("mongo-port"))["GeneDb"]
+    cnt = 0
+    print("Creation GeneDb", file = sys.stderr)
+    mongo_db["meta"].drop()
+    mongo_db["symbols"].drop()
+    with open(run_args.datasets[0], "r", encoding = "utf-8") as inp:
+        for line in inp:
+            rec = json.loads(line)
+            if "meta" in rec:
+                mongo_db["meta"].insert_one(rec)
+            else:
+                cnt += 1
+                mongo_db["symbols"].insert_one(rec)
+                if cnt % 10000 == 0:
+                    print(f"Storing {cnt} records...",
+                        end = '\r', file = sys.stderr)
+        print(f"\nStored {cnt} records, done", file = sys.stderr)
+    sys.exit()
+
+#===============================================
 mongo_db = MongoClient(
     cfg.get("mongo-host"), cfg.get("mongo-port"))[cfg["mongo-db"]]
 
-#===============================================
 aspects = set()
 for asp_code in run_args.aspects:
     if asp_code.upper() == "A":
@@ -101,9 +130,10 @@ for asp_code in run_args.aspects:
         aspects.add(sAspectMap[asp_code.upper()])
     else:
         assert False, ("Bad aspect code: " + asp_code
-            + " (All/Info/Filter/Dtree/Tags)")
+            + " (All/Info/Filter/Dtree/Panels/Tags)")
 
-assert len(aspects) > 0, "Aspect (All/Info/Filter/Dtree/Tags) not defined"
+assert len(aspects) > 0, (
+    "Aspect (All/Info/Filter/Dtree/Panels/Tags) not defined")
 
 print("//Aspects: " + " ".join(sorted(aspects)), file = sys.stderr)
 

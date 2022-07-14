@@ -25,7 +25,7 @@ Solution packs should be defined in process before work with any dataset. Soluti
     # and later, after configuration:
     SolutionPack.regPack(base_pack)
     
-Instance of class SolutionPack provides the following methods for registering various solution items:
+Instance of class SolutionPack provides the following methods for registering various solution items (from source file ``app/model/sol_pack.py``):
 
 ::
 
@@ -80,7 +80,7 @@ Instance of class SolutionPack provides the following methods for registering va
 
     * All functions for registration has the same argument **requires**. If not empty, the value of it should be set of strings, meaning modes that should be hold for dataset to make the redistered item available.
     
-    * For two types of solution items, filters and decision tree codes, their names automatically completes with prefix symbol `⏚` to make distinction between these preset items and dynamical ones, see :doc:`../concepts/sol_work` for detais.
+    * For solution items of kinds panels, filters and decision tree codes, their names automatically completes with prefix symbol `@` to make distinction between these preset items and dynamical ones, see :doc:`../concepts/sol_work` for detais.
     
     * For two kinds of solution items, decision tree codes and panels definition of item requires file with content. In the the current version of system these files are fixed in repository and located in code subdirectory ``app/configure/files``. Extensions for these files are ``.pyt`` and ``.lst`` corespondently. 
     
@@ -90,7 +90,7 @@ Instance of class SolutionPack provides the following methods for registering va
 
     Registration of :term:`filter` as naming solution item. 
     
-    *Note* The name of filter automatically completes with prefix symbol `⏚` to make distinction between these preset items and dynamical ones, see :doc:`../concepts/sol_work` for detais.
+    *Note* The name of filter automatically completes with prefix symbol `@` to make distinction between these preset items and dynamical ones, see :doc:`../concepts/sol_work` for detais.
 
     *Example*: ::
     
@@ -101,7 +101,7 @@ Instance of class SolutionPack provides the following methods for registering va
             ConditionMaker.condNum("QUAL", min_val = 40)]
             requires = {"WS"})
             
-    Here is a definition and registration of filter with name ``HighConfidence`` (for users ``⏚HighConfidence``) available if mode ``WS`` is on, i.e. if dataset is a :term:`workspace`.
+    Here is a definition and registration of filter with name ``HighConfidence`` (for users ``@HighConfidence``) available if mode ``WS`` is on, i.e. if dataset is a :term:`workspace`.
     
     Content of filter is sequence of :term:`conditions`, to create a condition one needs to use the helpers in class ``ConditionMaker``. The document :doc:`../rest/s_condition` detailed description of another presentation of the same objects, see it for explanation and details.
     
@@ -121,7 +121,7 @@ Instance of class SolutionPack provides the following methods for registering va
 
 * **regPanel** (self, panel_name, panel_type, fname = None, items = None, requires = None)
 
-    Registration of panels, in other words :term:`gene lists<gene list>`. Most panels are used for preparation of panel :term:`units<unit>` (see details in :doc:`flt_schema_py` the discussion of **panelsUnit()** function). 
+    Registration of a preset panel. 
     
     Items in panel can be defined either via file name or items directly.
     
@@ -138,8 +138,8 @@ Instance of class SolutionPack provides the following methods for registering va
 
 .. _panels_in_instance_context:
         
-    In the current version of the system additional gene/Symbol pannels can be added in context of instance of the application. Use :ref:`solutions<solutions>` option in :doc:`../adm/configuration` to open usage of directory from where the system loads additional panels. Panels are expexted to be represented as files in ``.lst`` format, and names of these files are interpreted as names of gene/Symbol panels. These panels work only in context of the instance of the application.
-         
+    In the current version of the system additional preset gene/Symbol pannels can be added in context of instance of the application. Use :ref:`solutions<solutions>` option in :doc:`../adm/configuration` to open usage of directory from where the system loads additional panels. Panels are expected to be represented as files in ``.lst`` format, and names of these files are interpreted as names of gene/Symbol panels. These panels work only in context of the instance of the application.
+    
 * **regItemDict** (self, name, the_dict, requires = None)
 
     Registration of dictionary of items. 

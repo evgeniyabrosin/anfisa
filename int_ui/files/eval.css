@@ -80,9 +80,10 @@ span.stat-count{
     font-style: italic;
 }
 
-p.stat-comment {
+.stat-comment {
+    padding: 1px;
+    padding-left: 40px;
     font-style: italic;
-    white-space: pre;
 }
 
 span.stat-ok {
@@ -150,8 +151,26 @@ div#cur-cond-enum-zeros {
     margin-bottom: 15px;
 }
 
+div#cur-cond-variety {
+    font-size: 12px;
+    cursor: pointer;
+    font-style: italic;
+    margin-top: 20px;
+    white-space: normal;
+    border: 1px solid #A0A0FF;
+    padding: 5px;
+    text-align: center;
+}
+
 div#op-enum-list.no-zeros div.zero {
     display: none;
+}
+
+div.enum-stat-note {
+    padding-left: 15px;
+    color: grey;
+    font-style: italic;
+    font-size: 90%;
 }
 
 div#cond-list {
@@ -400,13 +419,20 @@ span.hist-diap {
     display: inline-block;
 }
 
-span.hist-cell {
-    background-color: #8F2F0F;
+span.hist-cell, span.hist-cell-log {
     width: 15px;
     padding: 1px;
     margin: 0px;
     border: 0px;
     display: inline-block;
+}
+
+span.hist-cell {
+    background-color: #8080BF;
+}
+
+span.hist-cell-log {
+    background-color: #80BF80;
 }
 
 div#cur-cond-num-histogram {
@@ -417,3 +443,9 @@ div#cur-cond-num-histogram {
     display: block;
 }
 
+span.entropy-info {
+    color: grey;
+    font-weight: bold;
+    font-size: 90%;
+    vertical-align: bottom;
+}

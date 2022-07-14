@@ -25,6 +25,7 @@ class RegionFuncUnit(FunctionUnit):
     def makeIt(ds_h, descr, map_units, before = None, after = None):
         unit_h = RegionFuncUnit(ds_h, descr, map_units)
         ds_h.getEvalSpace()._insertUnit(unit_h, before = before, after = after)
+        ds_h.getEvalSpace()._addFunction(unit_h)
 
     def __init__(self, ds_h, descr, map_units):
         FunctionUnit.__init__(self, ds_h.getEvalSpace(), descr,
@@ -37,11 +38,11 @@ class RegionFuncUnit(FunctionUnit):
         if variants is None or "True" in variants:
             yield ("True", context["loc-condition"])
 
-    def makeInfoStat(self, eval_h, point_no):
-        return self.prepareStat()
+    def makeInfoStat(self, eval_h, stat_ctx, point_no):
+        return self.prepareStat(stat_ctx)
 
-    def makeParamStat(self, condition, parameters, eval_h, point_no):
-        ret_handle = self.prepareStat()
+    def makeParamStat(self, condition, parameters, eval_h, stat_ctx, point_no):
+        ret_handle = self.prepareStat(stat_ctx)
         ret_handle.update(parameters)
         loc_condition, error_msg = self.parse(parameters.get("locus"))
         if loc_condition is None:
@@ -95,23 +96,22 @@ class RegionFuncUnit(FunctionUnit):
                 self.getEvalSpace().getUnit(self.mMapUnits["chrom"]),
                 ["chr" + chrom_val]))
 
-        #if len(seq_cond) > 0:
-        #    return self.getEvalSpace().joinAnd(seq_cond), None
-
         if loc_parts[1]:
             if len(seq_cond) == 0:
                 return None, "No chromosome defined"
             start_val, sep, end_val = loc_parts[1].partition('-')
-            if not start_val.strip().isdigit():
+            start_val = start_val.strip()
+            if not start_val.isdigit() or len(start_val) > 10:
                 return None, "Bad start position"
-            start_val = int(start_val.strip())
+            start_val = int(start_val)
             seq_cond.append(self.getEvalSpace().makeNumericCond(
                 self.getEvalSpace().getUnit(self.mMapUnits["start"]),
                 min_val = start_val, min_eq = True))
             if not sep:
                 end_val = start_val
             else:
-                if not end_val.strip().isdigit():
+                end_val = end_val.strip()
+                if not end_val.isdigit() or len(end_val) > 10:
                     return None, "Bad end position"
                 end_val = int(end_val.strip())
             seq_cond.append(self.getEvalSpace().makeNumericCond(
@@ -120,7 +120,8 @@ class RegionFuncUnit(FunctionUnit):
 
         if len(loc_parts) > 2:
             gene_values = [val.strip() for val in loc_parts[2].split(',')]
-            if len(gene_values) < 1 or not all(gene_values):
+            if len(gene_values) < 1 or not all(gene_values) or max(
+                    len(val) for val in gene_values) > 30:
                 return None, "Bad gene values"
             seq_cond.append(self.getEvalSpace().makeEnumCond(
                 self.getEvalSpace().getUnit(self.mMapUnits["symbol"]),

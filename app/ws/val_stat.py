@@ -61,28 +61,39 @@ class NumDiapStat:
 
 #===============================================
 class NumHistogramBuilder:
+    sOneMinusShift = 1 - 1E-5
+
     def __init__(self, v_min, v_max, count, unit_h,
             too_low_power = -15, num_bins = 10):
         self.mIntMode = (unit_h.getSubKind() == "int")
-        self.mLogMode = "log" in unit_h.getInfo().get("render_mode", "")
+        self.mLogMode = "log" in unit_h.getInfo().get("render-mode", "")
 
         self.mInfo = None
         self.mIntervals = None
         if count < 2 or v_min >= v_max - 1E-15:
             return
 
-        if self.mIntMode:
-            v_min, v_max = int(v_min), int(v_max)
         if self.mLogMode:
             self.mInfo = ["LOG"]
-            pp = 0 if self.mIntMode else too_low_power
+            pp = 1 if self.mIntMode else too_low_power
             while (pow(1E1, pp) < v_min):
                 pp += 1
             self.mInfo.append(pp - 1)
             self.mIntervals = [pow(1E1, pp - 1)]
-            while (v_max > self.mIntervals[-1]):
-                self.mIntervals.append(pow(1E1, pp))
-                pp += 1
+            if self.mIntMode:
+                self.mIntervals[0] *= self.sOneMinusShift
+            while True:
+                next_bound = pow(1E1, pp)
+                low_next_bound = next_bound * self.sOneMinusShift
+                if v_max > low_next_bound:
+                    self.mIntervals.append(next_bound)
+                    pp += 1
+                    continue
+                if v_max >= next_bound:
+                    self.mIntervals.append(next_bound)
+                    pp += 1
+                break
+
             if len(self.mIntervals) == 1:
                 self.mInfo = None
                 self.mIntervals = None
@@ -90,15 +101,20 @@ class NumHistogramBuilder:
             self.mInfo.append(pp)
         else:
             self.mInfo = ["LIN", v_min, v_max]
-            if self.mIntMode and v_max - v_min <= num_bins:
-                step = 1.
+            if self.mIntMode and v_max - v_min < num_bins + 1E-3:
+                init, step = .5, 1.
             else:
-                step = float(v_max - v_min) / num_bins
-            vv = v_min + (step * .5)
+                step = max(1E-5, float(v_max - v_min) / num_bins)
+                init = step
             self.mIntervals = []
-            while vv < v_max:
+            vv = v_min + init
+            while vv < v_max - (step / 3):
                 self.mIntervals.append(vv)
                 vv += step
+            if len(self.mIntervals) == 0:
+                self.mInfo = None
+                self.mIntervals = None
+                return
         self.mInfo.append([0] * (len(self.mIntervals) + 1))
 
     def isOK(self):
@@ -117,7 +133,7 @@ class NumHistogramBuilder:
         if isinstance(val, list):
             val = val[0]
         for idx, cell_value in enumerate(self.mIntervals):
-            if val <= cell_value:
+            if val < cell_value:
                 self.mInfo[-1][idx] += 1
                 return
         self.mInfo[-1][-1] += 1
@@ -163,7 +179,7 @@ class EnumStat:
             if transcript_id is not None:
                 self.mVarTrSet[val].add(transcript_id)
 
-    def reportResult(self, ret_handle):
+    def makeResult(self):
         if self.mGroupStat is not None:
             self.flushGroup()
         rep_list = []
@@ -173,4 +189,7 @@ class EnumStat:
                 info.insert(1, self.mGroupStat.get(idx, 0))
                 info.append(len(self.mVarTrSet[idx]))
             rep_list.append(info)
-        ret_handle["variants"] = rep_list
+        return rep_list
+
+    def reportResult(self, ret_handle):
+        ret_handle["variants"] = self.makeResult()

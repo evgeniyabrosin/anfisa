@@ -24,6 +24,9 @@ from app.prepare.prep_filters import FilterPrepareSetH
 from .variables import anfisaVariables
 from .favor import FavorSchema
 #===============================================
+#===============================================
+sAdvanceMode = False
+
 sConsequenceVariants = [
     "transcript_ablation",
     "splice_acceptor_variant",
@@ -60,6 +63,9 @@ sConsequenceVariants = [
     "regulatory_region_variant",
     "feature_truncation",
     "intergenic_variant",
+    "splice_polypyrimidine_tract_variant",
+    "splice_donor_region_variant",
+    "splice_donor_5th_base_variant",
     "undefined"]
 
 #===============================================
@@ -103,14 +109,16 @@ def is_none(value):
 FilterPrepareSetH.regNamedFunction("has_variant", sample_has_variant)
 FilterPrepareSetH.regNamedFunction("is_none", is_none)
 #===============================================
-def defineFilterSchema(metadata_record):
+def defineFilterSchema(metadata_record, ds_kind, druid_adm = None):
     data_schema = metadata_record.get("data_schema")
     if data_schema == "FAVOR":
-        return FavorSchema.defineFilterSchema(metadata_record)
+        return FavorSchema.defineFilterSchema(
+            metadata_record, ds_kind, druid_adm)
     assert data_schema is None or data_schema == "CASE", (
         "Bad data schema: " + data_schema)
 
-    filters = FilterPrepareSetH(metadata_record, anfisaVariables)
+    filters = FilterPrepareSetH(metadata_record, anfisaVariables, ds_kind,
+        druid_adm if ds_kind != "ws" else None)
 
     cohorts = metadata_record.get("cohorts")
     with filters.viewGroup("Inheritance"):
@@ -120,7 +128,8 @@ def defineFilterSchema(metadata_record):
         filters.multiStatusUnit("Callers",
             "/_view/bioinformatics/called_by[]")
         filters.statusUnit("Proband_Zygosity",
-            "/_view/bioinformatics/zygosity")
+            "/_view/bioinformatics/zygosity",
+            requires = {"PROBAND"})
         filters.intValueUnit("Num_Samples", "/_filters/has_variant",
             conversion = ["len"], default_value = 0)
         filters.multiStatusUnit("Has_Variant", "/_filters/has_variant[]")
@@ -159,10 +168,15 @@ def defineFilterSchema(metadata_record):
         #   conversion = ["len"], default_value = 0)
 
     with filters.viewGroup("Genes"):
-        genes_unit = filters.multiStatusUnit("Symbol",
-            "/_view/general/genes[]", compact_mode = True)
-        filters.panelsUnit("Panels", genes_unit, "Symbol",
-            view_path = "/_view/general/gene_panels")
+        if sAdvanceMode:
+            filters.varietyUnit("_Symbol", "Symbol", "Gene_Lists",
+                "/_view/general/genes[]", "Symbol")
+        else:
+            genes_unit = filters.multiStatusUnit("Symbol",
+                "/_view/general/genes[]", compact_mode = True)
+            filters.panelsUnit("Gene_Lists", genes_unit, "Symbol",
+                view_path = "/_view/general/gene_panels")
+
         filters.multiStatusUnit("EQTL_Gene", "/_filters/eqtl_gene[]",
             default_value = "None")
         filters.intValueUnit("Num_Genes", "/_view/general/genes",
@@ -186,10 +200,17 @@ def defineFilterSchema(metadata_record):
             bool_check_value = "True", default_value = "False")
         filters.transcriptStatusUnit("Transcript_id", "id",
             default_value = "undefined", transcript_id_mode = True)
-        tr_genes_unit = filters.transcriptStatusUnit("Transctript_Gene",
-            "gene", default_value = "undefined")
-        filters.transcriptPanelsUnit("Transcript_Gene_Panels",
-            tr_genes_unit, "Symbol", view_name = "tr_gene_panels")
+
+        if sAdvanceMode:
+            filters.transcriptVarietyUnit("Transcript_Gene",
+                "Transcript_Gene_Lists", "gene", "Symbol",
+                default_value = "undefined")
+        else:
+            tr_genes_unit = filters.transcriptStatusUnit("Transctript_Gene",
+                "gene", default_value = "undefined")
+            filters.transcriptPanelsUnit("Transcript_Gene_Lists",
+                tr_genes_unit, "Symbol", view_name = "tr_gene_panels")
+
         filters.transcriptStatusUnit("Transcript_source", "transcript_source",
             default_value = "undefined")
         filters.transcriptStatusUnit("Transcript_codon_pos", "codonpos",
@@ -261,7 +282,8 @@ def defineFilterSchema(metadata_record):
             diap = (0., 1.), default_value = 0.)
         filters.floatValueUnit("gnomAD_AF_Proband",
             "/_filters/gnomad_af_pb",
-            diap = (0., 1.), default_value = 0.)
+            diap = (0., 1.), default_value = 0.,
+            requires = {"PROBAND"})
         filters.floatValueUnit("gnomAD_PopMax_AF",
             "/_filters/gnomad_popmax_af",
             diap = (0., 1.), default_value = 0.)
@@ -310,7 +332,7 @@ def defineFilterSchema(metadata_record):
 
     with filters.viewGroup("Call_Quality"):
         filters.floatValueUnit("Proband_GQ", "/_filters/proband_gq",
-            default_value = -1)
+            default_value = -1, requires = {"PROBAND"})
         filters.floatValueUnit("Min_GQ", "/_filters/min_gq",
             default_value = -1)
         filters.intValueUnit("Max_GQ", "/_view/quality_samples",
@@ -424,7 +446,7 @@ def defineFilterSchema(metadata_record):
         filters.multiStatusUnit("Mostly_Expressed_in",
             "/_filters/top_tissues[]", default_value = "N/A")
 
-    # required = {"debug"}
+    # requires = {"debug"}
     with filters.viewGroup("Debug_Info"):
         filters.intValueUnit("Severity", "/_filters/severity",
             default_value = -1)

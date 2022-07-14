@@ -25,7 +25,7 @@ from app.view.colgrp import ColGroupsH
 
 
 # ===============================================
-def defFavorView(metadata_record):
+def defFavorView(metadata_record, schema_modes):
     assert metadata_record.get("data_schema") == "FAVOR", (
         "FAVOR data schema expected: "
         + metadata_record.get("data_schema"))
@@ -58,12 +58,12 @@ def defFavorView(metadata_record):
         AspectH("_main", "VEP Data", "__data")
     ]
 
-    aspects = AspectSetH(aspect_list)
+    aspects = AspectSetH(aspect_list, schema_modes)
 
     aspects["view_bas"].setAttributes([
         AttrH("type", title = "Variant Type",
             kind = "string", tooltip = "Type of variant"),
-        AttrH("gene_panels", title = "Gene panels", is_seq = True),
+        AttrH("gene_lists", title = "Gene lists", is_seq = True),
         AttrH("rsID", kind = "string"),
         AttrH("TOPMed_Depth", kind = "string"),
         AttrH("TOPMed_QC_Status", kind = "string"),

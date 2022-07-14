@@ -25,11 +25,13 @@ from app.view.colgrp import ColGroupsH
 from .favor import FavorSchema
 
 #===============================================
-def defineViewSchema(metadata_record = None):
+def defineViewSchema(metadata_record = None, schema_modes = None):
     data_schema = (metadata_record.get("data_schema")
         if metadata_record else None)
+    if schema_modes is None:
+        schema_modes = set()
     if data_schema == "FAVOR":
-        return FavorSchema.defineViewSchema(metadata_record)
+        return FavorSchema.defineViewSchema(metadata_record, schema_modes)
     assert data_schema is None or data_schema == "CASE", (
         "Bad data schema: " + data_schema)
 
@@ -71,7 +73,7 @@ def defineViewSchema(metadata_record = None):
             col_groups = ColGroupsH([["colocated_variants", None]])),
         AspectH("input", "VCF", "__data", field = "input", mode = "string")]
 
-    aspects = AspectSetH(aspect_list)
+    aspects = AspectSetH(aspect_list, schema_modes)
 
     aspects["view_gen"].setAttributes([
         AttrH("genes", title = "Gene(s)", is_seq = True,
@@ -134,9 +136,10 @@ def defineViewSchema(metadata_record = None):
         AttrH("variant_intron_canonical",
             title = "Variant Intron (Canonical)", is_seq = True,
             tooltip = "Intron # according to canonical transcript"),
-        AttrH("gene_panels", title = "Gene panels", is_seq = True),
+        AttrH("gene_lists", kind = "place"),
         AttrH(None),
-        AttrH("proband_genotype", title = "Proband Genotype"),
+        AttrH("proband_genotype", title = "Proband Genotype",
+            requires = {"PROBAND"}),
         AttrH("maternal_genotype", title = "Maternal Genotype"),
         AttrH("paternal_genotype", title = "Paternal Genotype"),
         AttrH("igv", title = "IGV", kind = "place",
@@ -172,8 +175,7 @@ def defineViewSchema(metadata_record = None):
         AttrH("transcript_annotations", title = "Consequences", is_seq = True),
         AttrH("variant_exon", title = "Exon"),
         AttrH("variant_intron", title = "Intron"),
-        AttrH("tr_gene_panels", title = "Gene panels",
-            is_seq = True, kind = "posted"),
+        AttrH("tr_gene_lists", kind = "place"),
 
         AttrH("cpos", title = "CPos"),
         AttrH("hgvs_c_snp_eff", title = "CPos SnpEff"),
@@ -214,7 +216,7 @@ def defineViewSchema(metadata_record = None):
 
     aspects["view_qsamples"].setAttributes([
         AttrH("title", title = "Title"),
-        AttrH("qd", title = "Quality by Depth", is_seq = True,
+        AttrH("qd", title = "Quality by Depth", kind = "numeric",
             tooltip = "The QUAL score normalized by allele depth (AD) "
             "for a variant. This annotation puts the variant confidence "
             "QUAL score into perspective by normalizing for the amount "
@@ -225,7 +227,7 @@ def defineViewSchema(metadata_record = None):
             "than it really is. To compensate for this, we normalize "
             "the variant confidence by depth, which gives us a more "
             "objective picture of how well supported the call is."),
-        AttrH("mq", title = "Mapping Quality", is_seq = True,
+        AttrH("mq", title = "Mapping Quality", kind = "numeric",
             tooltip = "This is the root mean square mapping quality over all "
             "the reads at the site. Instead of the average mapping "
             "quality of the site, this annotation gives the square root "
@@ -237,7 +239,8 @@ def defineViewSchema(metadata_record = None):
             tooltip = "QUAL tells you how confident we are that there is "
             "some kind of variation at a given site. The variation may be "
             "present in one or more samples."),
-        AttrH("strand_odds_ratio", title = "Strand Odds Ratio", is_seq = True,
+        AttrH("strand_odds_ratio", kind = "numeric",
+            title = "Strand Odds Ratio",
             tooltip = "Another way to estimate strand bias using a "
             "test similar to the symmetric odds ratio test. "
             "SOR was created because FS tends to penalize variants "
@@ -245,7 +248,7 @@ def defineViewSchema(metadata_record = None):
             "exons tend to only be covered by reads in one direction "
             "and FS gives those variants a bad score. SOR will take "
             "into account the ratios of reads that cover both alleles."),
-        AttrH("fs", title = "Fisher Strand Bias", is_seq = True,
+        AttrH("fs", title = "Fisher Strand Bias", kind = "numeric",
             tooltip = "Phred-scaled probability that there is strand bias at "
             "the site. Strand Bias tells us whether the alternate "
             "allele was seen more or less often on the forward or "
@@ -279,13 +282,13 @@ def defineViewSchema(metadata_record = None):
 
     aspects["view_gnomAD"].setAttributes([
         AttrH("allele", title = "Allele"),
-        AttrH("proband", title = "Proband"),
+        AttrH("proband", title = "Proband", requires = {"PROBAND"}),
         AttrH("pli", title = "pLI", is_seq = True),
         AttrH("af", title = "Overall AF"),
         AttrH("genome_af", title = "Genome AF"),
         AttrH("exome_af", title = "Exome AF"),
         AttrH("hom", title = "Number of homozygotes"),
-        AttrH("hem", title = "Number of hemizygotes", is_seq = True),
+        AttrH("hem", title = "Number of hemizygotes"),
         AttrH("genome_an", title = "Genome AN"),
         AttrH("exome_an", title = "Exome AN"),
         AttrH("url", title = "URL", kind = "link", is_seq = True),

@@ -25,17 +25,20 @@ from xml.sax.saxutils import escape
 from app.config.a_config import AnfisaConfig
 from app.model.rest_api import RestAPI
 from app.model.dataset import DataSet
+
 from .rules import RulesUnit
 from .tags_man import TagsManager
-from .zone import FilterZoneH
+from .zone import FilterZoneH, PanelZoneH
 from .ws_unit import loadWS_Unit
 from .ws_space import WS_EvalSpace
+from .ws_io import exportWS
+from .val_stat import EnumStat
 
 #===============================================
 class Workspace(DataSet):
     def __init__(self, data_vault, dataset_info, dataset_path):
-        DataSet.__init__(self, data_vault, dataset_info, dataset_path,
-            add_modes = {"WS"})
+        DataSet.__init__(self, data_vault, dataset_info, dataset_path)
+        assert self.getDSKind() == "ws"
         assert self.getRecStorage().getKind() == "disk", (
             "Missing storage kind: " + self.getRecStorage().getKind())
         self.mTabRecRand = array('q')
@@ -62,26 +65,30 @@ class Workspace(DataSet):
                     transcript_id_unit = unit_h.getName()
         self._loadPData()
         self._loadFData()
-        self.mTagsMan = TagsManager(self,
-            self.getPanelVariants("Check-Tags", "_tags"))
         self.mRulesUnit = RulesUnit(self)
         self.mEvalSpace._insertUnit(self.mRulesUnit, insert_idx = 0)
         if not transcript_id_unit:
             transcript_id_unit = AnfisaConfig.configOption("ws.transcript.id")
         self.mEvalSpace._setupTrIdUnit(transcript_id_unit)
+        self.mTagsMan = None
         self.startService()
 
+        self.mTagsMan = TagsManager(self, "Check-Tags")
         self.mZoneHandlers  = []
         for zone_it in self.iterStdItems("zone"):
             unit_name = zone_it.getData()
-            if (unit_name == "_tags"):
+            if unit_name == "_tags":
                 zone_h = self.mTagsMan
                 zone_h._setTitle(zone_it.getName())
             else:
                 unit_h = self.mEvalSpace.getUnit(unit_name)
                 if (not unit_h):
                     continue
-                zone_h = FilterZoneH(self, zone_it.getName(), unit_h)
+                if (unit_h.getMean() == "panel"
+                        and "panel-name" in unit_h.getDescr()):
+                    zone_h = PanelZoneH(self, zone_it.getName(), unit_h)
+                else:
+                    zone_h = FilterZoneH(self, zone_it.getName(), unit_h)
             self.mZoneHandlers.append(zone_h)
 
         for filter_h in self.iterSolEntries("filter"):
@@ -132,6 +139,16 @@ class Workspace(DataSet):
     @staticmethod
     def makeNegation(func_f):
         return lambda rec_no: not func_f(rec_no)
+
+    def checkSupportStat(self, name, condition):
+        if name == "_tags":
+            ret_handle = {"name": "_tags", "kind": "support"}
+            enum_stat = EnumStat(self.mTagsMan.getTagList())
+            for rec_no, _ in condition.iterSelection():
+                enum_stat.regValues(self.mTagsMan.getRecTags(rec_no))
+            enum_stat.reportResult(ret_handle)
+            return ret_handle
+        return None
 
     def restrictZoneF(self, zone_data):
         ret_seq = []
@@ -214,7 +231,7 @@ class Workspace(DataSet):
             "total-counts": self.mEvalSpace.getTotalCounts(),
             "filtered-counts": condition.getCounts(zone_fseq),
             "records": records}
-        self.visitCondition(condition, ret_handle)
+        self.visitEvaluation(filter_h, ret_handle)
         return ret_handle
 
     #===============================================
@@ -264,3 +281,10 @@ class Workspace(DataSet):
         with self:
             self.mTagsMan.selectionTagging(tag_name, rec_no_seq)
         return {"tags-state": self.getSolEnv().getIntVersion("tags")}
+
+    #===============================================
+    @RestAPI.ws_request
+    def rq__export_ws(self, rq_args):
+        use_support = rq_args.get("support") not in ("no", "off", "0")
+        use_root_doc = rq_args.get("doc") not in ("no", "off", "0")
+        return exportWS(self, use_support, use_root_doc)

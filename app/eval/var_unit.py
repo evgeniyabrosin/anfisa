@@ -26,11 +26,13 @@ class VarUnit:
     def __init__(self, eval_space, descr, unit_kind = None,
             sub_kind = None):
         self.mEvalSpace = eval_space
+        self.mDescr = descr
         self.mUnitKind  = descr.get("kind", unit_kind)
         self.mSubKind = descr.get("sub-kind", sub_kind)
         self.mInternalName = descr["name"]
         self.mVGroup = descr.get("vgroup")
         self.mNo    = descr.get("no", -1)
+        self.mDimName = descr.get("dim-name")
         self.mScreened = False
         if unit_kind is not None:
             assert self.mUnitKind == unit_kind, (
@@ -39,16 +41,11 @@ class VarUnit:
         if sub_kind is not None:
             assert self.mSubKind == sub_kind, (
                 f"Sub-kind conflict: {self.mSubKind}/{sub_kind}"
-                f"for {self.mInternalName}")
+                f" for {self.mInternalName}")
 
-        var_kind, var_descr = (self.mEvalSpace.getDS().
-            getDataVault().getVariableInfo(self.mInternalName))
-
-        assert self.mUnitKind == var_kind, (
-            f"Variable kind conflict: {self.mUnitKind}/{var_kind} "
-            f"for {self.mInternalName}")
-
-        self.mInfo = deepcopy(var_descr)
+        self.mInfo = self.mEvalSpace.getDS().getDataVault().getVariableInfo(
+            self.mInternalName, self.mUnitKind, self.mSubKind,
+            self.mDescr.get("mean"))
         self.mName = self.mInfo["name"].replace(' ', '_')
         self.mInfo["vgroup"] = self.mVGroup
         self.mInfo["kind"] = self.mUnitKind
@@ -91,7 +88,16 @@ class VarUnit:
     def _setScreened(self, value = True):
         self.mScreened = value
 
-    def prepareStat(self, incomplete_mode = False):
+    def getMean(self):
+        return self.mDescr.get("mean")
+
+    def getDescr(self):
+        return self.mDescr
+
+    def getDimName(self):
+        return self.mDimName
+
+    def prepareStat(self, stat_ctx, incomplete_mode = False):
         ret_handle = deepcopy(self.mInfo)
         if incomplete_mode:
             ret_handle["incomplete"] = True
@@ -118,6 +124,12 @@ class EnumUnitSupport:
             return self.getEvalSpace().getCondNone()
         return self.getEvalSpace().makeEnumCond(
             self, variants, filter_mode)
+
+    def filterActualVariants(self, variants):
+        return sorted(set(variants) & self.getVariantSet().makeValueSet())
+
+    def evalExtraVariants(self, variants):
+        return self.getVariantSet().makeValueSet() - set(variants)
 
 #===============================================
 #===============================================
@@ -166,15 +178,15 @@ class FunctionUnit(ComplexEnumUnit):
     def getParameters(self):
         return self.mParameters
 
-    def makeInfoStat(self, eval_h):
-        return VarUnit.prepareStat(self, None)
+    def makeInfoStat(self, eval_h, stat_ctx, point_no):
+        return VarUnit.prepareStat(self, stat_ctx, None)
 
     @abc.abstractmethod
     def locateContext(self, cond_data, eval_h):
         return None
 
     @abc.abstractmethod
-    def makeParamStat(self, condition, parameters, eval_h):
+    def makeParamStat(self, condition, parameters, eval_h, stat_ctx):
         return None
 
     @abc.abstractmethod
