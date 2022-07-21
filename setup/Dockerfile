@@ -1,8 +1,7 @@
-# Replaced   /anfisa/anfisa/setup --> /anfisa/anfisa because deploy.sh (line 54) does: cp setup/*  $WORKDIR/
-FROM python:3.7
+FROM python:3.7-slim
 WORKDIR /anfisa
+RUN apt-get update && apt-get install -y nginx git gcc
 RUN bash -c 'mkdir -p /anfisa/anfisa && mkdir -p /anfisa/a-setup/ && mkdir -p /data/'
-
 COPY . /anfisa/anfisa/
 RUN cd /anfisa/anfisa/ && pip3 install -e git+https://github.com/ForomePlatform/forome_misc_tools.git#egg=forome-tools && pip3 install -r requirements.txt && pip3 install supervisor
 RUN cd /anfisa/anfisa/setup && mv anfisa.json.docker /anfisa/anfisa.json && mv entrypoint.sh /usr/bin/entrypoint.sh && chmod +x /usr/bin/entrypoint.sh
@@ -11,7 +10,6 @@ ENV ANFISA_WORK=/anfisa/a-setup
 ENV ANFISA_ROOT=/anfisa
 ENV ANFISA_HTML_APP_BASE=/anfisa/app
 ENV ANFISA_HTML_BASE=/anfisa
-RUN apt-get update && apt-get install -y nginx
 RUN cd /anfisa/anfisa/setup && mv default.nginx /etc/nginx/conf.d/anfisa.conf && rm /etc/nginx/sites-enabled/* && mv supervisord.conf /etc/supervisord.conf && mv uwsgi.ini /anfisa/uwsgi.ini
 
 
