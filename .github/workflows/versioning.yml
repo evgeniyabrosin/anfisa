@@ -1,0 +1,21 @@
+name: Version Increment
+
+on:
+  push:
+    branches:
+      - 'v.0.7.x'
+    paths-ignore:
+      - '.github/workflows/**'
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: git config --global user.name 'Version Bot'
+      - run: git config --global user.email '<>'       
+      - run: echo "SHORT_SHA=`echo ${GITHUB_SHA} | cut -c1-8`" >> $GITHUB_ENV
+      - run: sed -i 's/$/-'$SHORT_SHA'/' ./app/VERSION
+      - run: git add .
+      - run: git commit -m "update VERSION"
+      - run: git push
