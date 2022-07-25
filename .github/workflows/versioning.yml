@@ -15,7 +15,9 @@ jobs:
       - run: git config --global user.name 'Version Bot'
       - run: git config --global user.email '<>'       
       - run: echo "SHORT_SHA=`echo ${GITHUB_SHA} | cut -c1-8`" >> $GITHUB_ENV
-      - run: sed -i 's/$/-'$SHORT_SHA'/' ./app/VERSION
+      # - run: sed -i 's/$/-'$SHORT_SHA'/' ./app/VERSION
+      - run: sed -i 's/\(.*\)[0-9]/\100/' ./app/VERSION
+      
       - run: git add .
       - run: git commit -m "update VERSION"
       - run: git push
